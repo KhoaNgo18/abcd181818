@@ -1,0 +1,4 @@
+selenium
+pyautogui
+webdriver_manager
+beautifulsoup4

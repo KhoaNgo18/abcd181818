@@ -1,0 +1,16 @@
+{
+    "actions": [
+      {
+        "command": "OpenURL",
+        "args": {
+          "url": "https://github.com/"
+        }
+      },
+      {
+        "command": "Move To Element",
+        "args": {
+          "js_path": "body > div.logged-out.env-production.page-responsive.header-overlay.header-overlay-fixed.js-header-overlay-fixed > div.position-relative.header-wrapper.js-header-wrapper > header > div > div.HeaderMenu.js-header-menu.height-fit.position-lg-relative.d-lg-flex.flex-column.flex-auto.top-0 > div > div > a"
+        }
+      }
+    ]
+  }
