@@ -3,13 +3,26 @@
       {
         "command": "OpenURL",
         "args": {
-          "url": "https://github.com/"
+          "url": "https://monad.ambient.finance/swap"
         }
       },
       {
-        "command": "Move To Element",
+        "command": "Click Element",
         "args": {
-          "js_path": "body > div.logged-out.env-production.page-responsive.header-overlay.header-overlay-fixed.js-header-overlay-fixed > div.position-relative.header-wrapper.js-header-wrapper > header > div > div.HeaderMenu.js-header-menu.height-fit.position-lg-relative.d-lg-flex.flex-column.flex-auto.top-0 > div > div > a"
+          "full_x_path": "/html/body/div/div[1]/div/section/div/div/div[3]/button"
+        }
+      },
+      {
+        "command": "Click Element",
+        "args": {
+          "full_x_path": "/html/body/div/div[5]/div/aside/div/div/section/div/section[2]/button"
+        }
+      },
+      {
+        "command": "Check by Image",
+        "args": {
+          "img_path": "test.png",
+          "threshold": 0.8
         }
       }
     ]
