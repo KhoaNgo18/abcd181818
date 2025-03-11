@@ -22,12 +22,17 @@
     <script>
         let workflow = {};
         
-        function addGroup(name = "") {
-            const groupName = ''
+        function addGroup(name = "", isLoading = false) {
+            const groupName = name || prompt("Enter Group Name:");
             if (!groupName) return;
             
-            workflow[groupName] = [];
+            if (!isLoading && workflow[groupName]) {
+                alert("Group already exists!");
+                return;
+            }
             
+            workflow[groupName] = workflow[groupName] || [];
+        
             const group = document.createElement("div");
             group.className = "group";
             group.dataset.groupName = groupName;
@@ -38,7 +43,7 @@
                 <div class="commands"></div>
             `;
             document.getElementById("groups").appendChild(group);
-        }
+        }        
         
         function updateGroupName(input) {
             let group = input.parentElement;
@@ -57,7 +62,7 @@
         }
         
         function addCommand(button, commandData = null) {
-            let group = button.parentElement;
+            let group = button.closest(".group");
             let groupName = group.dataset.groupName;
             
             const command = document.createElement("div");
@@ -89,28 +94,23 @@
         
         function updateCommand(element, savedArgs = []) {
             let commandDiv = element.parentElement;
-            let group = commandDiv.parentElement.parentElement;
-            let groupName = group.dataset.groupName;
-            let command = element.value;
             let argsContainer = commandDiv.querySelector(".args");
             argsContainer.innerHTML = '';
             
-            if (command === "Send Hotkey") {
-                argsContainer.innerHTML = '<input type="text" placeholder="Keys (comma-separated)" oninput="storeArgs(this)">';
-            } else if (command === "Keyboard Type") {
-                argsContainer.innerHTML = '<input type="text" placeholder="Text to type" oninput="storeArgs(this)">';
-            } else if (command === "Keyboard Press") {
-                argsContainer.innerHTML = '<input type="text" placeholder="Key to press" oninput="storeArgs(this)">';
-            } else if (command === "OpenURL") {
-                argsContainer.innerHTML = '<input type="text" placeholder="URL" oninput="storeArgs(this)">';
-            } else if (command === "Click Element") {
-                argsContainer.innerHTML = '<input type="text" placeholder="XPath" oninput="storeArgs(this)">';
-            } else if (command === "Check by Image And Move") {
-                argsContainer.innerHTML = '<input type="text" placeholder="Image Path" oninput="storeArgs(this)">';
-            } else if (command === "Mouse Click") {
-                argsContainer.innerHTML = '';
-            } else if (command === "Mouse Move") {
-                argsContainer.innerHTML = '<input type="number" placeholder="X Coordinate" oninput="storeArgs(this)"> <input type="number" placeholder="Y Coordinate" oninput="storeArgs(this)">';
+            if (element.value === "Send Hotkey") {
+                argsContainer.innerHTML = '<input type="text" placeholder="Keys (comma-separated)">';
+            } else if (element.value === "Keyboard Type") {
+                argsContainer.innerHTML = '<input type="text" placeholder="Text to type">';
+            } else if (element.value === "Keyboard Press") {
+                argsContainer.innerHTML = '<input type="text" placeholder="Key to press">';
+            } else if (element.value === "OpenURL") {
+                argsContainer.innerHTML = '<input type="text" placeholder="URL">';
+            } else if (element.value === "Click Element") {
+                argsContainer.innerHTML = '<input type="text" placeholder="XPath">';
+            } else if (element.value === "Check by Image And Move") {
+                argsContainer.innerHTML = '<input type="text" placeholder="Image Path">';
+            } else if (element.value === "Mouse Move") {
+                argsContainer.innerHTML = '<input type="number" placeholder="X"> <input type="number" placeholder="Y">';
             }
             
             if (savedArgs.length) {
@@ -130,12 +130,15 @@
                 workflow = JSON.parse(e.target.result);
                 document.getElementById("groups").innerHTML = "";
                 Object.keys(workflow).forEach(groupName => {
-                    addGroup(groupName);
-                    workflow[groupName].forEach(command => addCommand(document.querySelector(`[data-group-name='${groupName}'] button`), command));
+                    addGroup(groupName, true); // Pass true to avoid duplicate check
+                    let groupElement = document.querySelector(`[data-group-name='${groupName}']`);
+                    let addCommandBtn = groupElement.querySelector("button");
+                    workflow[groupName].forEach(command => addCommand(addCommandBtn, command));
                 });
             };
             reader.readAsText(file);
-        }
+        }        
+        
         function loadWorkflow() {
             document.getElementById("fileInput").click();
         }
