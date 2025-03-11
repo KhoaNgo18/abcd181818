@@ -1,0 +1,4 @@
+# Chạy App
+python backend/app.py test_open_chrome.json
+# Lấy vùng kiểm tra ảnh
+python backend/getRoi.py screenshots/screenshot_0.jpg

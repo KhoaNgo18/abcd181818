@@ -1,5 +1,25 @@
 {
-    "actions": [
+    "openChrome" : [
+      {
+        "command": "Send Hotkey",
+        "args": {
+          "hotkey": ["win", "r"]
+        }
+      },
+      {
+        "command": "Keyboard Type",
+        "args": {
+          "text": "cmd"
+        }
+      },
+      {
+        "command": "Keyboard Press",
+        "args": {
+          "text": "enter"
+        }
+      }
+    ],
+    "test1": [
       {
         "command": "OpenURL",
         "args": {
@@ -19,11 +39,14 @@
         }
       },
       {
-        "command": "Check by Image",
+        "command": "Check by Image And Move",
         "args": {
-          "img_path": "test.png",
+          "img_path": "MetaMask.png",
           "threshold": 0.8
         }
+      },
+      {
+        "command": "Mouse Click"
       }
     ]
   }

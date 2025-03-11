@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Builder</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .group { border: 2px solid #000; padding: 10px; margin: 10px; }
+        .command { border: 1px solid #000; padding: 10px; margin: 5px; }
+        .command select, .command input { margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Workflow Builder</h1>
+    <button onclick="addGroup()">Add Group</button>
+    <button onclick="saveWorkflow()">Save Workflow</button>
+    <button onclick="loadWorkflow()">Load Workflow</button>
+    <input type="file" id="fileInput" style="display:none" onchange="handleFileLoad(event)">
+    <div id="groups"></div>
+    
+    <script>
+        let workflow = {};
+        
+        function addGroup(name = "") {
+            const groupName = ''
+            if (!groupName) return;
+            
+            workflow[groupName] = [];
+            
+            const group = document.createElement("div");
+            group.className = "group";
+            group.dataset.groupName = groupName;
+            group.innerHTML = `
+                <input type="text" value="${groupName}" oninput="updateGroupName(this)">
+                <button onclick="addCommand(this)">Add Command</button>
+                <button onclick="removeGroup(this)">Remove Group</button>
+                <div class="commands"></div>
+            `;
+            document.getElementById("groups").appendChild(group);
+        }
+        
+        function updateGroupName(input) {
+            let group = input.parentElement;
+            let oldName = group.dataset.groupName;
+            let newName = input.value;
+            
+            if (workflow[newName]) {
+                alert("Group name already exists!");
+                input.value = oldName;
+                return;
+            }
+            
+            workflow[newName] = workflow[oldName];
+            delete workflow[oldName];
+            group.dataset.groupName = newName;
+        }
+        
+        function addCommand(button, commandData = null) {
+            let group = button.parentElement;
+            let groupName = group.dataset.groupName;
+            
+            const command = document.createElement("div");
+            command.className = "command";
+            command.innerHTML = `
+                <select onchange="updateCommand(this)">
+                    <option value="">Select Command</option>
+                    <option value="Send Hotkey">Send Hotkey</option>
+                    <option value="Keyboard Type">Keyboard Type</option>
+                    <option value="Keyboard Press">Keyboard Press</option>
+                    <option value="OpenURL">Open URL</option>
+                    <option value="Click Element">Click Element</option>
+                    <option value="Check by Image And Move">Check by Image And Move</option>
+                    <option value="Mouse Click">Mouse Click</option>
+                    <option value="Mouse Move">Mouse Move</option>
+                    <option value="Connect Driver">Connect Driver</option>
+                </select>
+                <div class="args"></div>
+                <button onclick="removeCommand(this)">Remove</button>
+            `;
+            
+            group.querySelector(".commands").appendChild(command);
+            
+            if (commandData) {
+                command.querySelector("select").value = commandData.command;
+                updateCommand(command.querySelector("select"), commandData.args);
+            }
+        }
+        
+        function updateCommand(element, savedArgs = []) {
+            let commandDiv = element.parentElement;
+            let group = commandDiv.parentElement.parentElement;
+            let groupName = group.dataset.groupName;
+            let command = element.value;
+            let argsContainer = commandDiv.querySelector(".args");
+            argsContainer.innerHTML = '';
+            
+            if (command === "Send Hotkey") {
+                argsContainer.innerHTML = '<input type="text" placeholder="Keys (comma-separated)" oninput="storeArgs(this)">';
+            } else if (command === "Keyboard Type") {
+                argsContainer.innerHTML = '<input type="text" placeholder="Text to type" oninput="storeArgs(this)">';
+            } else if (command === "Keyboard Press") {
+                argsContainer.innerHTML = '<input type="text" placeholder="Key to press" oninput="storeArgs(this)">';
+            } else if (command === "OpenURL") {
+                argsContainer.innerHTML = '<input type="text" placeholder="URL" oninput="storeArgs(this)">';
+            } else if (command === "Click Element") {
+                argsContainer.innerHTML = '<input type="text" placeholder="XPath" oninput="storeArgs(this)">';
+            } else if (command === "Check by Image And Move") {
+                argsContainer.innerHTML = '<input type="text" placeholder="Image Path" oninput="storeArgs(this)">';
+            } else if (command === "Mouse Click") {
+                argsContainer.innerHTML = '';
+            } else if (command === "Mouse Move") {
+                argsContainer.innerHTML = '<input type="number" placeholder="X Coordinate" oninput="storeArgs(this)"> <input type="number" placeholder="Y Coordinate" oninput="storeArgs(this)">';
+            }
+            
+            if (savedArgs.length) {
+                let inputs = argsContainer.querySelectorAll("input");
+                savedArgs.forEach((arg, index) => {
+                    if (inputs[index]) inputs[index].value = arg;
+                });
+            }
+        }
+        
+        function handleFileLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                workflow = JSON.parse(e.target.result);
+                document.getElementById("groups").innerHTML = "";
+                Object.keys(workflow).forEach(groupName => {
+                    addGroup(groupName);
+                    workflow[groupName].forEach(command => addCommand(document.querySelector(`[data-group-name='${groupName}'] button`), command));
+                });
+            };
+            reader.readAsText(file);
+        }
+        function loadWorkflow() {
+            document.getElementById("fileInput").click();
+        }
+    </script>
+</body>
+</html>
