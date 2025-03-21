@@ -3,3 +3,4 @@ pyautogui
 webdriver_manager
 beautifulsoup4
 opencv-python
+keyboard

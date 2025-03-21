@@ -1,0 +1,127 @@
+{
+  "openChrome": [
+    {
+      "command": "Send Hotkey",
+      "args": {
+        "keys": [
+          "win",
+          "r"
+        ]
+      }
+    },
+    {
+      "command": "Keyboard Type",
+      "args": {
+        "text": "cmd"
+      }
+    },
+    {
+      "command": "Keyboard Press",
+      "args": {
+        "key": "enter"
+      }
+    },
+    {
+      "command": "Keyboard Type",
+      "args": {
+        "text": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --remote-debugging-port=9222 --profile-directory=\"Profile 1\""
+      }
+    },
+    {
+      "command": "Keyboard Press",
+      "args": {
+        "key": "enter"
+      }
+    },
+    {
+      "command": "Connect Driver",
+      "args": {}
+    }
+  ],
+  "Chrome1": [
+    {
+      "command": "OpenURL",
+      "args": {
+        "url": "https://monad.ambient.finance/swap"
+      }
+    },
+    {
+      "command": "Click Element",
+      "args": {
+        "full_x_path": "/html/body/div/div[1]/div/section/div/div/div[3]/button"
+      }
+    },
+    {
+      "command": "Click Element",
+      "args": {
+        "full_x_path": "/html/body/div/div[5]/div/aside/div/div/section/div/section[2]/button"
+      }
+    },
+    {
+      "command": "Check by Image And Move",
+      "args": {
+        "img_path": "images/MetaMask.png",
+        "roi": [
+          [
+            760,
+            283
+          ],
+          [
+            1170,
+            841
+          ]
+        ],
+        "threshold": 0.8
+      }
+    },
+    {
+      "command": "Mouse Click",
+      "args": {}
+    },
+    {
+      "command": "Check by Image",
+      "args": {
+        "img_path": "images/MetaMask2.png",
+        "roi": [
+          [
+            1559,
+            0
+          ],
+          [
+            2069,
+            621
+          ]
+        ],
+        "threshold": 0.8
+      }
+    },
+    {
+      "command": "Mouse Move",
+      "args": {
+        "x": 1710,
+        "y": 348
+      }
+    },
+    {
+      "command": "Mouse Click",
+      "args": {}
+    },
+    {
+      "command": "Keyboard Type",
+      "args": {
+        "text": "NgodinhanhkhoaMM18!"
+      }
+    },
+    {
+      "command": "Mouse Move",
+      "args": {
+        "x": 1727,
+        "y": 416
+      }
+    },
+    {
+      "command": "Mouse Click",
+      "args": {}
+    }
+  ]
+}

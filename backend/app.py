@@ -164,7 +164,7 @@ def check_by_image(input_image_path, roi=None, threshold=0.8, debug=False):
             elapsed_time = time.time() - start_time
             if elapsed_time > 10:
                 print("Image not found within 10 seconds. Exiting...")
-                sys.exit(1)
+                return None
             
             # Take a screenshot
             screenshot = pyautogui.screenshot()
@@ -174,8 +174,7 @@ def check_by_image(input_image_path, roi=None, threshold=0.8, debug=False):
             input_image = cv2.imread(input_image_path, cv2.IMREAD_COLOR)
             if input_image is None:
                 print("Error: Input image not found.")
-                sys.exit(1)
-            
+                return None
             input_height, input_width = input_image.shape[:2]
             
             offset_x, offset_y = 0, 0
@@ -218,8 +217,7 @@ def check_by_image(input_image_path, roi=None, threshold=0.8, debug=False):
                 return (middle_x, middle_y)
         except Exception as e:
             print(f"Error in check_by_image: {e}")
-            sys.exit(1)
-            
+                        
 def check_by_image_and_move(input_image_path, threshold=0.8, roi=None, debug=False):
     position = check_by_image(input_image_path=input_image_path, threshold=threshold, roi=roi, debug=debug)
     if position is not None:
@@ -275,9 +273,9 @@ def main(json_file):
             elif command == "Click Element":
                 locate_and_click_element(driver, args.get("full_x_path"))
             elif command == "Check by Image":
-                check_by_image(input_image_path=args.get("img_path"), threshold=args.get("threshold"), roi=args.get("roi", None), debug=args.get("debug", False))
+                check_by_image(input_image_path=args.get("img_path"), threshold=args.get("threshold", 0.8), roi=args.get("roi", None), debug=args.get("debug", False))
             elif command == "Check by Image And Move":
-                check_by_image_and_move(input_image_path=args.get("img_path"), threshold=args.get("threshold"), roi=args.get("roi", None), debug=args.get("debug", False))
+                check_by_image_and_move(input_image_path=args.get("img_path"), threshold=args.get("threshold", 0.8), roi=args.get("roi", None), debug=args.get("debug", False))
             elif command == "Send Hotkey":
                 send_hotkey(*args.get("keys"))
             elif command == "Connect Driver":
@@ -286,7 +284,6 @@ def main(json_file):
             print(f"Done with: {command}")
             time.sleep(1)
     print('Done with all commands')
-    driver.quit()
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
