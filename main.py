@@ -146,17 +146,23 @@ class WorkflowBuilder:
         
         # Create group frame
         group_frame = tk.LabelFrame(self.groups_container, text="", bd=2, relief=tk.GROOVE)
-        group_frame.pack(fill=tk.X, padx=5, pady=5, expand=True)
+        group_frame.grid(row=len(self.groups_frames), column=0, sticky="ew", padx=5, pady=5)
         self.groups_frames[name] = group_frame
+        
+        group_frame.grid_columnconfigure(0, weight=1)
         
         # Group header frame
         header_frame = tk.Frame(group_frame)
-        header_frame.pack(fill=tk.X, padx=5, pady=5)
+        header_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        header_frame.grid_columnconfigure(0, weight=0)
+        for i in range(1, 6):  # For buttons
+            header_frame.grid_columnconfigure(i, weight=1)
         
         # Group name entry
         name_var = tk.StringVar(value=name)
         name_entry = tk.Entry(header_frame, textvariable=name_var, width=20)
-        name_entry.pack(side=tk.LEFT, padx=5)
+        
+        name_entry.grid(row=0, column=0, padx=5, sticky="w")
         name_entry.bind("<FocusOut>", lambda e, old_name=name: self.update_group_name(old_name, name_var.get()))
         
         # Add undo tracking for group name
@@ -164,13 +170,24 @@ class WorkflowBuilder:
         self.setup_text_field_tracking(name_entry, field_id)
         
         # Group buttons
-        tk.Button(header_frame, text="Add Command", command=lambda: self.add_command(name)).pack(side=tk.LEFT, padx=5)
-        tk.Button(header_frame, text="Test Group", command=lambda: self.test_workflow(group_name=name)).pack(side=tk.LEFT, padx=5)
-        tk.Button(header_frame, text="Remove Group", command=lambda: self.remove_group(name)).pack(side=tk.LEFT, padx=5)
+        btn_commands = [
+            ("Add Command", lambda: self.add_command(name)),
+            ("Test Group", lambda: self.test_workflow(group_name=name)),
+            ("Remove Group", lambda: self.remove_group(name)),
+            ("↑", lambda: self.move_group(name, direction="up")),
+            ("↓", lambda: self.move_group(name, direction="down"))
+        ]
+
+        for i, (text, command) in enumerate(btn_commands):
+            tk.Button(header_frame, text=text, command=command, 
+                    width=3 if text in ["↑", "↓"] else None).grid(
+                row=0, column=i+1, padx=5, sticky="w"
+            )
         
         # Commands container frame
         commands_frame = tk.Frame(group_frame)
-        commands_frame.pack(fill=tk.X, padx=5, pady=5, expand=True)
+        commands_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
+        commands_frame.grid_columnconfigure(0, weight=1)
         
         # Store the commands frame reference in the group frame
         group_frame.commands_frame = commands_frame
@@ -235,7 +252,9 @@ class WorkflowBuilder:
         
         # Create command frame
         command_frame = tk.Frame(commands_frame, bd=1, relief=tk.SOLID)
-        command_frame.pack(fill=tk.X, padx=5, pady=2, expand=True)
+        row_index = len(commands_frame.winfo_children())
+        command_frame.grid(row=row_index, column=0, sticky="ew", padx=5, pady=2)
+        command_frame.grid_columnconfigure(1, weight=1)
         
         # Command type dropdown
         command_types = [
@@ -246,24 +265,36 @@ class WorkflowBuilder:
         
         command_var = tk.StringVar()
         command_dropdown = ttk.Combobox(command_frame, textvariable=command_var, values=command_types, width=20)
-        command_dropdown.pack(side=tk.LEFT, padx=5, pady=5)
+        command_dropdown.grid(row=0, column=0, padx=5, pady=5, sticky="w")
         
         # Args frame - will be populated when command type changes
         args_frame = tk.Frame(command_frame)
-        args_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
+        args_frame.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
         
         # Command buttons
         buttons_frame = tk.Frame(command_frame)
-        buttons_frame.pack(side=tk.RIGHT, padx=5, pady=5)
+        buttons_frame.grid(row=0, column=2, padx=5, pady=5, sticky="e")
         
         # Test command button
         tk.Button(buttons_frame, text="Test", command=lambda: self.test_workflow(
             group_name=group_name, 
             command_index=self.get_command_index(group_name, command_frame)
-        )).pack(side=tk.LEFT, padx=2)
-        
+        )).grid(row=0, column=0, padx=2)
+
         # Remove button
-        tk.Button(buttons_frame, text="Remove", command=lambda: self.remove_command(group_name, command_frame)).pack(side=tk.LEFT, padx=2)
+        tk.Button(buttons_frame, text="Remove", command=lambda: self.remove_command(group_name, command_frame)).grid(
+            row=0, column=1, padx=2
+        )
+
+        # Up button
+        tk.Button(buttons_frame, text="↑", width=2, command=lambda: self.move_command(
+            group_name, command_frame, "up"
+        )).grid(row=0, column=2, padx=2)
+
+        # Down button
+        tk.Button(buttons_frame, text="↓", width=2, command=lambda: self.move_command(
+            group_name, command_frame, "down"
+        )).grid(row=0, column=3, padx=2)
         
         # Store the args frame reference
         command_frame.args_frame = args_frame
@@ -434,7 +465,7 @@ class WorkflowBuilder:
         
         # Add command to workflow if it's not already there
         self.update_workflow_command(group_name, command_frame)
-    
+        
     def browse_image(self, entry_widget):
         filename = filedialog.askopenfilename(filetypes=[("Image files", "*.png;*.jpg;*.jpeg;*.bmp")])
         if filename:
@@ -1095,39 +1126,7 @@ class WorkflowBuilder:
         except Exception as e:
             messagebox.showerror("Error", f"An error occurred: {e}")
             return None
-    
-    def undo_last_action(self, event=None):
-        """Handle Ctrl+Z to undo the last action"""
-        if not self.undo_stack:
-            messagebox.showinfo("Undo", "Nothing to undo")
-            return
-            
-        action = self.undo_stack.pop()
-        action_type = action.get('type')
-        
-        if action_type == 'remove_command':
-            group_name = action.get('group_name')
-            command_data = action.get('command_data')
-            command_index = action.get('command_index')
-            
-            # Restore the command
-            if group_name in self.workflow and group_name in self.groups_frames:
-                if command_index <= len(self.workflow[group_name]):
-                    self.workflow[group_name].insert(command_index, command_data)
-                    self.add_command(group_name, command_data)
-                    messagebox.showinfo("Undo", f"Restored command in group '{group_name}'")
-        
-        elif action_type == 'remove_group':
-            group_name = action.get('group_name')
-            group_data = action.get('group_data')
-            
-            # Restore the group
-            self.workflow[group_name] = group_data
-            self.add_group(group_name, is_loading=True)
-            for command_data in group_data:
-                self.add_command(group_name, command_data)
-            messagebox.showinfo("Undo", f"Restored group '{group_name}'")
-    
+
     def remove_command(self, group_name, command_frame):
         if group_name not in self.workflow:
             return
@@ -1282,6 +1281,123 @@ class WorkflowBuilder:
         # Clear focus by setting focus to the root window
         self.root.focus_set()
     
+    def move_group(self, group_name, direction):
+        """Move a group up or down in the workflow execution order"""
+        # Get all group names in order
+        group_names = list(self.groups_frames.keys())
+        
+        # Find current index of the group
+        try:
+            current_index = group_names.index(group_name)
+        except ValueError:
+            return
+        
+        # Calculate new index based on direction
+        if direction == "up" and current_index > 0:
+            new_index = current_index - 1
+        elif direction == "down" and current_index < len(group_names) - 1:
+            new_index = current_index + 1
+        else:
+            return  # Can't move further in that direction
+        
+        # Swap groups in the UI
+        group_frames = list(self.groups_frames.values())
+        
+        # Get the group before which we need to grid our moved group
+        target_frame = group_frames[new_index]
+        
+        # Get current grid info for both frames
+        current_frame = group_frames[current_index]
+        
+        # Store grid info (row numbers)
+        current_row = current_frame.grid_info()['row']
+        target_row = target_frame.grid_info()['row']
+        
+        # Re-grid the frames
+        current_frame.grid(row=target_row, column=0, sticky="ew", padx=5, pady=5)
+        target_frame.grid(row=current_row, column=0, sticky="ew", padx=5, pady=5)
+        
+        # Update the order in the groups_frames dict by recreating it
+        # (This preserves the order for future operations)
+        reordered_groups = {}
+        for i, name in enumerate(group_names):
+            if i == new_index:
+                reordered_groups[group_name] = self.groups_frames[group_name]
+            elif name == group_name:
+                reordered_groups[group_names[new_index]] = self.groups_frames[group_names[new_index]]
+            else:
+                reordered_groups[name] = self.groups_frames[name]
+        
+        # Update the groups_frames dict
+        self.groups_frames = reordered_groups
+        
+        # Update the visual look to indicate the move
+        self.flash_widget(current_frame)
+    
+    def flash_widget(self, widget, flash_count=1):
+        """Briefly highlight a widget to provide visual feedback for move operations"""
+        original_bg = widget.cget("background")
+        
+        def flash_cycle(count):
+            if count <= 0:
+                widget.configure(background=original_bg)
+                return
+            
+            # Change to highlight color
+            widget.configure(background="#A0C8F0")  # Light blue
+            
+            # Schedule change back after a short delay
+            widget.after(100, lambda: widget.configure(background=original_bg))
+            
+            # Schedule next flash
+            widget.after(200, lambda: flash_cycle(count-1))
+        
+        flash_cycle(flash_count)
+    
+    def move_command(self, group_name, command_frame, direction):
+        """Move a command up or down within its group"""
+        if group_name not in self.workflow or group_name not in self.groups_frames:
+            return
+        
+        # Get the commands frame for this group
+        commands_frame = self.groups_frames[group_name].commands_frame
+        
+        # Get all command frames
+        command_frames = commands_frame.winfo_children()
+        
+        # Find the current index of the command
+        try:
+            current_index = command_frames.index(command_frame)
+        except ValueError:
+            return
+        
+        # Calculate new index based on direction
+        if direction == "up" and current_index > 0:
+            new_index = current_index - 1
+        elif direction == "down" and current_index < len(command_frames) - 1:
+            new_index = current_index + 1
+        else:
+            return  # Can't move further in that direction
+        
+        # Update the workflow data structure
+        self.update_workflow_command(group_name, command_frame)  # Ensure command data is current
+        command_data = self.workflow[group_name][current_index]
+        
+        # Remove from old position and insert at new position
+        self.workflow[group_name].pop(current_index)
+        self.workflow[group_name].insert(new_index, command_data)
+        
+        # Get the grid info for both frames
+        current_row = command_frame.grid_info()['row']
+        target_row = command_frames[new_index].grid_info()['row']
+        
+        # Re-grid the command frames
+        command_frame.grid(row=target_row, column=0, sticky="ew", padx=5, pady=2)
+        command_frames[new_index].grid(row=current_row, column=0, sticky="ew", padx=5, pady=2)
+        
+        # Visual feedback
+        self.flash_widget(command_frame)
+
 if __name__ == "__main__":
     root = tk.Tk()
     app = WorkflowBuilder(root)
