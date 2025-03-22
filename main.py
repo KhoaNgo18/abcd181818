@@ -14,18 +14,39 @@ import keyboard  # For detecting key presses
 import cv2
 import numpy as np
 
-SIZE = "1400x600"
-
 class WorkflowBuilder:
     def __init__(self, root):
-        
         self.undo_stack = []
         self.max_undo_stack = 20
         self.text_field_original_values = {}
         
         self.root = root
         self.root.title("Workflow Builder")
-        self.root.geometry(SIZE)
+        
+        # Get screen dimensions to calculate appropriate window size
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+        
+        # Set window size as a percentage of screen dimensions
+        window_width = int(screen_width * 0.7)  # 70% of screen width
+        window_height = int(screen_height * 0.7)  # 70% of screen height
+        
+        # Set minimum size to ensure UI elements are always visible
+        min_width = 800
+        min_height = 600
+        window_width = max(window_width, min_width)
+        window_height = max(window_height, min_height)
+        
+        # Position the window in the center of the screen
+        position_x = int((screen_width - window_width) / 2)
+        position_y = int((screen_height - window_height) / 2)
+        
+        # Set window geometry
+        self.root.geometry(f"{window_width}x{window_height}+{position_x}+{position_y}")
+        
+        # Make the window resizable with minimum size
+        self.root.minsize(min_width, min_height)
+        
         self.root.bind("<Control-z>", self.undo_last_action)
         self.root.bind("<Button-1>", self.clear_focus)
         self.root.bind("<Return>", self.clear_focus)
@@ -37,33 +58,54 @@ class WorkflowBuilder:
         # Try to import the backend module
         self.load_backend_module()
         
+        # Configure the root window to resize properly
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_rowconfigure(0, weight=1)
+        
         # Main frame with scrollbar
         self.main_frame = tk.Frame(root)
-        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.main_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        
+        # Configure the main frame to resize properly
+        self.main_frame.grid_columnconfigure(0, weight=1)
+        self.main_frame.grid_rowconfigure(1, weight=1)  # Row 1 is for the canvas
         
         # Button frame
         self.button_frame = tk.Frame(self.main_frame)
-        self.button_frame.pack(fill=tk.X, pady=5)
+        self.button_frame.grid(row=0, column=0, sticky="ew", pady=5)
+        
+        # Calculate button sizes based on window width
+        button_width = max(10, int((window_width * 0.12) / 10))  # Scale button width
         
         # Add buttons
-        tk.Button(self.button_frame, text="Add Group", command=self.add_group).pack(side=tk.LEFT, padx=5)
-        tk.Button(self.button_frame, text="Save Workflow", command=self.save_workflow).pack(side=tk.LEFT, padx=5)
-        tk.Button(self.button_frame, text="Load Workflow", command=self.load_workflow).pack(side=tk.LEFT, padx=5)
-        tk.Button(self.button_frame, text="Test Workflow", command=self.test_workflow).pack(side=tk.LEFT, padx=5)
-        tk.Button(self.button_frame, text="Get Mouse Position", command=self.get_mouse_position).pack(side=tk.LEFT, padx=5)
-        tk.Button(self.button_frame, text="Select ROI", command=self.select_roi_from_image).pack(side=tk.LEFT, padx=5)
+        buttons = [
+            ("Add Group", self.add_group),
+            ("Save Workflow", self.save_workflow),
+            ("Load Workflow", self.load_workflow),
+            ("Test Workflow", self.test_workflow),
+            ("Get Mouse Position", self.get_mouse_position),
+            ("Select ROI", self.select_roi_from_image)
+        ]
+        
+        for i, (text, command) in enumerate(buttons):
+            tk.Button(self.button_frame, text=text, command=command, width=button_width).grid(
+                row=0, column=i, padx=5, pady=5, sticky="ew"
+            )
+            self.button_frame.grid_columnconfigure(i, weight=1)
         
         # Create canvas with scrollbar
         self.canvas = tk.Canvas(self.main_frame)
         self.scrollbar = tk.Scrollbar(self.main_frame, orient="vertical", command=self.canvas.yview)
+        self.scrollbar.grid(row=1, column=1, sticky="ns")
+        self.canvas.grid(row=1, column=0, sticky="nsew")
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
-        
-        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         # Frame inside canvas for groups
         self.groups_container = tk.Frame(self.canvas)
         self.canvas_frame = self.canvas.create_window((0, 0), window=self.groups_container, anchor="nw")
+        
+        # Make the groups container expandable
+        self.groups_container.grid_columnconfigure(0, weight=1)
         
         # Configure canvas scrolling
         self.groups_container.bind("<Configure>", self.on_frame_configure)
@@ -71,6 +113,13 @@ class WorkflowBuilder:
         
         # Mouse wheel scrolling
         self.canvas.bind_all("<MouseWheel>", self.on_mousewheel)
+        # For Linux and Mac (may need further adjustment for Mac)
+        self.canvas.bind_all("<Button-4>", lambda e: self.on_mousewheel_linux(e, -1))
+        self.canvas.bind_all("<Button-5>", lambda e: self.on_mousewheel_linux(e, 1))
+    
+    def on_mousewheel_linux(self, event, direction):
+        # Scroll canvas with mouse wheel (Linux/Mac)
+        self.canvas.yview_scroll(direction, "units")
     
     def on_frame_configure(self, event):
         # Update the scrollregion when the inner frame changes size
