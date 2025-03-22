@@ -744,33 +744,56 @@ class WorkflowBuilder:
         """Show test results in a scrollable window"""
         result_window = tk.Toplevel(self.root)
         result_window.title(f"Test Results - {test_type}")
-        result_window.geometry(SIZE)
+        
+        # Size the result window relative to the main window
+        main_window_width = self.root.winfo_width()
+        main_window_height = self.root.winfo_height()
+        result_window_width = int(main_window_width * 0.8)
+        result_window_height = int(main_window_height * 0.8)
+        
+        # Position the result window centered relative to the main window
+        main_window_x = self.root.winfo_x()
+        main_window_y = self.root.winfo_y()
+        result_window_x = main_window_x + int((main_window_width - result_window_width) / 2)
+        result_window_y = main_window_y + int((main_window_height - result_window_height) / 2)
+        
+        result_window.geometry(f"{result_window_width}x{result_window_height}+{result_window_x}+{result_window_y}")
+        result_window.minsize(600, 400)  # Set a reasonable minimum size
+        
+        # Configure grid layout
+        result_window.grid_columnconfigure(0, weight=1)
+        result_window.grid_rowconfigure(1, weight=1)  # Row 1 for notebook (main content)
         
         # Status label
         status_frame = tk.Frame(result_window)
-        status_frame.pack(fill=tk.X, padx=10, pady=5)
+        status_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
+        status_frame.grid_columnconfigure(0, weight=1)
         
         status_label = tk.Label(
-            status_frame, 
-            text=f"Test {'SUCCEEDED' if success else 'FAILED'}", 
+            status_frame,
+            text=f"Test {'SUCCEEDED' if success else 'FAILED'}",
             fg="green" if success else "red",
             font=("Arial", 12, "bold")
         )
-        status_label.pack(side=tk.LEFT)
+        status_label.grid(row=0, column=0, sticky="w")
         
         # Notebook for stdout/stderr
         notebook = ttk.Notebook(result_window)
-        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        notebook.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
         
         # Stdout tab
         stdout_frame = tk.Frame(notebook)
         notebook.add(stdout_frame, text="Output")
         
+        # Configure stdout frame to expand
+        stdout_frame.grid_columnconfigure(0, weight=1)
+        stdout_frame.grid_rowconfigure(0, weight=1)
+        
         stdout_scrollbar = tk.Scrollbar(stdout_frame)
-        stdout_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        stdout_scrollbar.grid(row=0, column=1, sticky="ns")
         
         stdout_text = tk.Text(stdout_frame, wrap=tk.WORD, yscrollcommand=stdout_scrollbar.set)
-        stdout_text.pack(fill=tk.BOTH, expand=True)
+        stdout_text.grid(row=0, column=0, sticky="nsew")
         stdout_scrollbar.config(command=stdout_text.yview)
         
         stdout_text.insert(tk.END, stdout)
@@ -781,18 +804,22 @@ class WorkflowBuilder:
             stderr_frame = tk.Frame(notebook)
             notebook.add(stderr_frame, text="Errors")
             
+            # Configure stderr frame to expand
+            stderr_frame.grid_columnconfigure(0, weight=1)
+            stderr_frame.grid_rowconfigure(0, weight=1)
+            
             stderr_scrollbar = tk.Scrollbar(stderr_frame)
-            stderr_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            stderr_scrollbar.grid(row=0, column=1, sticky="ns")
             
             stderr_text = tk.Text(stderr_frame, wrap=tk.WORD, yscrollcommand=stderr_scrollbar.set)
-            stderr_text.pack(fill=tk.BOTH, expand=True)
+            stderr_text.grid(row=0, column=0, sticky="nsew")
             stderr_scrollbar.config(command=stderr_text.yview)
             
             stderr_text.insert(tk.END, stderr)
             stderr_text.config(state=tk.DISABLED)
         
         # Close button
-        tk.Button(result_window, text="Close", command=result_window.destroy).pack(pady=10)
+        tk.Button(result_window, text="Close", command=result_window.destroy).grid(row=2, column=0, pady=10)
          
     def load_backend_module(self):
         from backend.app import main
