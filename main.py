@@ -28,8 +28,8 @@ class WorkflowBuilder:
         screen_height = root.winfo_screenheight()
         
         # Set window size as a percentage of screen dimensions
-        window_width = int(screen_width * 0.7)  # 70% of screen width
-        window_height = int(screen_height * 0.7)  # 70% of screen height
+        window_width = int(screen_width * 0.85) 
+        window_height = int(screen_height * 0.85)
         
         # Set minimum size to ensure UI elements are always visible
         min_width = 800
@@ -93,6 +93,9 @@ class WorkflowBuilder:
             )
             self.button_frame.grid_columnconfigure(i, weight=1)
         
+        # Add the Chrome Group button
+        self.add_open_chrome_button()
+        
         # Create canvas with scrollbar
         self.canvas = tk.Canvas(self.main_frame)
         self.scrollbar = tk.Scrollbar(self.main_frame, orient="vertical", command=self.canvas.yview)
@@ -116,7 +119,7 @@ class WorkflowBuilder:
         # For Linux and Mac (may need further adjustment for Mac)
         self.canvas.bind_all("<Button-4>", lambda e: self.on_mousewheel_linux(e, -1))
         self.canvas.bind_all("<Button-5>", lambda e: self.on_mousewheel_linux(e, 1))
-    
+
     def on_mousewheel_linux(self, event, direction):
         # Scroll canvas with mouse wheel (Linux/Mac)
         self.canvas.yview_scroll(direction, "units")
@@ -132,77 +135,6 @@ class WorkflowBuilder:
     def on_mousewheel(self, event):
         # Scroll canvas with mouse wheel
         self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-    
-    def add_group(self, name=None, is_loading=False):
-        if not name:
-            name = f"Group {len(self.workflow) + 1}"
-        
-        if not is_loading and name in self.workflow:
-            messagebox.showerror("Error", "Group already exists!")
-            return
-        
-        # Initialize group in workflow
-        self.workflow[name] = self.workflow.get(name, [])
-        
-        # Create group frame
-        group_frame = tk.LabelFrame(self.groups_container, text="", bd=2, relief=tk.GROOVE)
-        group_frame.grid(row=len(self.groups_frames), column=0, sticky="ew", padx=5, pady=5)
-        self.groups_frames[name] = group_frame
-        
-        group_frame.grid_columnconfigure(0, weight=1)
-        
-        # Group header frame
-        header_frame = tk.Frame(group_frame)
-        header_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
-        header_frame.grid_columnconfigure(0, weight=0)
-        for i in range(1, 6):  # For buttons
-            header_frame.grid_columnconfigure(i, weight=1)
-        
-        # Group name entry
-        name_var = tk.StringVar(value=name)
-        name_entry = tk.Entry(header_frame, textvariable=name_var, width=20)
-        
-        name_entry.grid(row=0, column=0, padx=5, sticky="w")
-        name_entry.bind("<FocusOut>", lambda e, old_name=name: self.update_group_name(old_name, name_var.get()))
-        
-        # Add undo tracking for group name
-        field_id = f"group_name_{id(group_frame)}_{name}"
-        self.setup_text_field_tracking(name_entry, field_id)
-        
-        # Group buttons
-        btn_commands = [
-            ("Add Command", lambda: self.add_command(name)),
-            ("Test Group", lambda: self.test_workflow(group_name=name)),
-            ("Remove Group", lambda: self.remove_group(name)),
-            ("↑", lambda: self.move_group(name, direction="up")),
-            ("↓", lambda: self.move_group(name, direction="down"))
-        ]
-
-        for i, (text, command) in enumerate(btn_commands):
-            tk.Button(header_frame, text=text, command=command, 
-                    width=3 if text in ["↑", "↓"] else None).grid(
-                row=0, column=i+1, padx=5, sticky="w"
-            )
-        
-        # Commands container frame
-        commands_frame = tk.Frame(group_frame)
-        commands_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
-        commands_frame.grid_columnconfigure(0, weight=1)
-        
-        # Store the commands frame reference in the group frame
-        group_frame.commands_frame = commands_frame
-        
-        # Record group creation for undo if not loading an existing group
-        if not is_loading:
-            self.undo_stack.append({
-                'type': 'group_create',
-                'group_name': name
-            })
-            # Limit undo stack size
-            if len(self.undo_stack) > self.max_undo_stack:
-                self.undo_stack.pop(0)
-        
-        return group_frame
 
     def update_group_name(self, old_name, new_name):
         if old_name == new_name:
@@ -242,230 +174,7 @@ class WorkflowBuilder:
                         widget.config(command=lambda: self.test_workflow(group_name=new_name))
                     elif isinstance(widget, tk.Button) and widget['text'] == "Remove Group":
                         widget.config(command=lambda: self.remove_group(new_name))
-
-    def add_command(self, group_name, command_data=None):
-        if group_name not in self.workflow or group_name not in self.groups_frames:
-            return
-        
-        # Get the commands frame for this group
-        commands_frame = self.groups_frames[group_name].commands_frame
-        
-        # Create command frame
-        command_frame = tk.Frame(commands_frame, bd=1, relief=tk.SOLID)
-        row_index = len(commands_frame.winfo_children())
-        command_frame.grid(row=row_index, column=0, sticky="ew", padx=5, pady=2)
-        command_frame.grid_columnconfigure(1, weight=1)
-        
-        # Command type dropdown
-        command_types = [
-            "", "Send Hotkey", "Keyboard Type", "Keyboard Press", 
-            "OpenURL", "Click Element", "Check by Image", 
-            "Check by Image And Move", "Mouse Click", "Mouse Move", "Connect Driver"
-        ]
-        
-        command_var = tk.StringVar()
-        command_dropdown = ttk.Combobox(command_frame, textvariable=command_var, values=command_types, width=20)
-        command_dropdown.grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        
-        # Args frame - will be populated when command type changes
-        args_frame = tk.Frame(command_frame)
-        args_frame.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        
-        # Command buttons
-        buttons_frame = tk.Frame(command_frame)
-        buttons_frame.grid(row=0, column=2, padx=5, pady=5, sticky="e")
-        
-        # Test command button
-        tk.Button(buttons_frame, text="Test", command=lambda: self.test_workflow(
-            group_name=group_name, 
-            command_index=self.get_command_index(group_name, command_frame)
-        )).grid(row=0, column=0, padx=2)
-
-        # Remove button
-        tk.Button(buttons_frame, text="Remove", command=lambda: self.remove_command(group_name, command_frame)).grid(
-            row=0, column=1, padx=2
-        )
-
-        # Up button
-        tk.Button(buttons_frame, text="↑", width=2, command=lambda: self.move_command(
-            group_name, command_frame, "up"
-        )).grid(row=0, column=2, padx=2)
-
-        # Down button
-        tk.Button(buttons_frame, text="↓", width=2, command=lambda: self.move_command(
-            group_name, command_frame, "down"
-        )).grid(row=0, column=3, padx=2)
-        
-        # Store the args frame reference
-        command_frame.args_frame = args_frame
-        
-        # Bind command selection event
-        command_dropdown.bind("<<ComboboxSelected>>", lambda e: self.update_command_args(group_name, command_frame, command_var.get()))
-        
-        # If loading from saved data
-        if command_data:
-            command_var.set(command_data.get('command', ''))
-            args = command_data.get('args', {})
-            if not isinstance(args, dict):
-                args = {}
-            self.update_command_args(group_name, command_frame, command_var.get(), args)
-        
-        return command_frame
-    
-    def update_command_args(self, group_name, command_frame, command_type, saved_args=None):
-        # Clear previous args widgets
-        args_frame = command_frame.args_frame
-        for widget in args_frame.winfo_children():
-            widget.destroy()
-        
-        # Ensure saved_args is a dictionary
-        if saved_args is None:
-            saved_args = {}
-        elif not isinstance(saved_args, dict):
-            saved_args = {}
-                
-        # Add appropriate input fields based on command type
-        arg_widgets = []
-        
-        if command_type == "Send Hotkey":
-            lbl = tk.Label(args_frame, text="Keys (comma-separated):")
-            lbl.pack(side=tk.LEFT, padx=2)
-            entry = tk.Entry(args_frame, width=20)
-            entry.pack(side=tk.LEFT, padx=2)
-            arg_widgets.append(("keys", entry))
-            # Add undo tracking for this field
-            field_id = f"cmd_{id(command_frame)}_{group_name}_keys"
-            self.setup_text_field_tracking(entry, field_id)
-            
-        elif command_type == "Keyboard Type":
-            lbl = tk.Label(args_frame, text="Text to type:")
-            lbl.pack(side=tk.LEFT, padx=2)
-            entry = tk.Entry(args_frame, width=100)
-            entry.pack(side=tk.LEFT, padx=2)
-            arg_widgets.append(("text", entry))
-            # Add undo tracking
-            field_id = f"cmd_{id(command_frame)}_{group_name}_text"
-            self.setup_text_field_tracking(entry, field_id)
-            
-        elif command_type == "Keyboard Press":
-            lbl = tk.Label(args_frame, text="Key to press:")
-            lbl.pack(side=tk.LEFT, padx=2)
-            entry = tk.Entry(args_frame, width=10)
-            entry.pack(side=tk.LEFT, padx=2)
-            arg_widgets.append(("key", entry))
-            # Add undo tracking
-            field_id = f"cmd_{id(command_frame)}_{group_name}_key"
-            self.setup_text_field_tracking(entry, field_id)
-            
-        elif command_type == "OpenURL":
-            lbl = tk.Label(args_frame, text="URL:")
-            lbl.pack(side=tk.LEFT, padx=2)
-            entry = tk.Entry(args_frame, width=100)
-            entry.pack(side=tk.LEFT, padx=2)
-            arg_widgets.append(("url", entry))
-            # Add undo tracking
-            field_id = f"cmd_{id(command_frame)}_{group_name}_url"
-            self.setup_text_field_tracking(entry, field_id)
-            
-        elif command_type == "Click Element":
-            lbl = tk.Label(args_frame, text="XPath:")
-            lbl.pack(side=tk.LEFT, padx=2)
-            entry = tk.Entry(args_frame, width=100)
-            entry.pack(side=tk.LEFT, padx=2)
-            arg_widgets.append(("full_x_path", entry))
-            # Add undo tracking
-            field_id = f"cmd_{id(command_frame)}_{group_name}_xpath"
-            self.setup_text_field_tracking(entry, field_id)
-            
-        elif command_type in ["Check by Image", "Check by Image And Move"]:
-            lbl = tk.Label(args_frame, text="Image Path:")
-            lbl.pack(side=tk.LEFT, padx=2)
-            entry = tk.Entry(args_frame, width=80)
-            entry.pack(side=tk.LEFT, padx=2)
-            browse_btn = tk.Button(args_frame, text="Browse", command=lambda e=entry: self.browse_image(e))
-            browse_btn.pack(side=tk.LEFT, padx=2)
-            arg_widgets.append(("img_path", entry))
-            # Add undo tracking
-            field_id = f"cmd_{id(command_frame)}_{group_name}_img_path"
-            self.setup_text_field_tracking(entry, field_id)
-            
-            # Add ROI field
-            roi_lbl = tk.Label(args_frame, text="Check Region:")
-            roi_lbl.pack(side=tk.LEFT, padx=2)
-            roi_entry = tk.Entry(args_frame, width=20)
-            roi_entry.pack(side=tk.LEFT, padx=2)
-            arg_widgets.append(("roi", roi_entry))
-            # Add undo tracking
-            field_id = f"cmd_{id(command_frame)}_{group_name}_roi"
-            self.setup_text_field_tracking(roi_entry, field_id)
-            
-            # Add Threshold field
-            threshold_lbl = tk.Label(args_frame, text="Threshold:")
-            threshold_lbl.pack(side=tk.LEFT, padx=2)
-            threshold_entry = tk.Entry(args_frame, width=5)
-            threshold_entry.insert(0, "0.8")  # Default threshold value
-            threshold_entry.pack(side=tk.LEFT, padx=2)
-            arg_widgets.append(("threshold", threshold_entry))
-            # Add undo tracking
-            field_id = f"cmd_{id(command_frame)}_{group_name}_threshold"
-            self.setup_text_field_tracking(threshold_entry, field_id)
-            
-        elif command_type == "Mouse Move":
-            lbl_x = tk.Label(args_frame, text="X:")
-            lbl_x.pack(side=tk.LEFT, padx=2)
-            entry_x = tk.Entry(args_frame, width=5)
-            entry_x.pack(side=tk.LEFT, padx=2)
-            
-            lbl_y = tk.Label(args_frame, text="Y:")
-            lbl_y.pack(side=tk.LEFT, padx=2)
-            entry_y = tk.Entry(args_frame, width=5)
-            entry_y.pack(side=tk.LEFT, padx=2)
-            
-            arg_widgets.append(("x", entry_x))
-            arg_widgets.append(("y", entry_y))
-            # Add undo tracking
-            field_id_x = f"cmd_{id(command_frame)}_{group_name}_x"
-            field_id_y = f"cmd_{id(command_frame)}_{group_name}_y"
-            self.setup_text_field_tracking(entry_x, field_id_x)
-            self.setup_text_field_tracking(entry_y, field_id_y)
-        
-        # Store arg widgets reference for saving
-        command_frame.arg_widgets = arg_widgets
-        
-        # Fill with saved values if provided
-        if saved_args:
-            for key, widget in arg_widgets:
-                if key in saved_args:
-                    widget.delete(0, tk.END)  # Clear any default values first
-                    if isinstance(saved_args[key], list):
-                        if key == 'roi':  # Handle ROI list differently
-                            widget.insert(0, ", ".join(map(str, saved_args[key])))
-                        else:
-                            widget.insert(0, ",".join(map(str, saved_args[key])))
-                    else:
-                        widget.insert(0, str(saved_args[key]))
-        
-        # Record command type change for undo if this is an update to an existing command
-        group_commands = self.groups_frames[group_name].commands_frame.winfo_children()
-        index = group_commands.index(command_frame)
-        if 0 <= index < len(self.workflow[group_name]):
-            old_command = self.workflow[group_name][index].get('command', '')
-            if old_command != command_type and old_command:  # Only record if changing from a non-empty type
-                self.undo_stack.append({
-                    'type': 'command_type_change',
-                    'group_name': group_name,
-                    'command_index': index,
-                    'old_type': old_command,
-                    'old_args': self.workflow[group_name][index].get('args', {}),
-                    'new_type': command_type
-                })
-                # Limit undo stack size
-                if len(self.undo_stack) > self.max_undo_stack:
-                    self.undo_stack.pop(0)
-        
-        # Add command to workflow if it's not already there
-        self.update_workflow_command(group_name, command_frame)
-        
+  
     def browse_image(self, entry_widget):
         filename = filedialog.askopenfilename(filetypes=[("Image files", "*.png;*.jpg;*.jpeg;*.bmp")])
         if filename:
@@ -485,6 +194,11 @@ class WorkflowBuilder:
         args = {}
         for key, widget in getattr(command_frame, 'arg_widgets', []):
             value = widget.get()
+            
+            # Skip empty ROI values for image commands
+            if key == 'roi' and value.strip() == '' and command_type in ["Check by Image", "Check by Image And Move"]:
+                continue
+                
             if ',' in value and key == 'keys':  # Handle comma-separated values
                 args[key] = [v.strip() for v in value.split(',')]
             elif key in ['x', 'y']:  # Convert coordinates to integers
@@ -493,7 +207,9 @@ class WorkflowBuilder:
                 except ValueError:
                     args[key] = 0
             else:
-                args[key] = value
+                # Don't add empty values to keep JSON clean
+                if value.strip():
+                    args[key] = value
         
         # Create command data
         command_data = {
@@ -517,7 +233,7 @@ class WorkflowBuilder:
             commands_frame = group_frame.commands_frame
             for i, command_frame in enumerate(commands_frame.winfo_children()):
                 self.update_workflow_command(group_name, command_frame)
-                
+                    
                 # Special handling for values that need conversion
                 if i < len(self.workflow[group_name]):
                     command_data = self.workflow[group_name][i]
@@ -544,7 +260,7 @@ class WorkflowBuilder:
                                 except (ValueError, IndexError):
                                     # If parsing fails, keep original format
                                     pass
-                        
+                            
                         # Convert threshold from string to float
                         if 'threshold' in command_data['args']:
                             threshold_value = command_data['args']['threshold']
@@ -573,7 +289,7 @@ class WorkflowBuilder:
             messagebox.showinfo("Success", f"Workflow saved to {filename}")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save workflow: {e}")
-    
+            
     def load_workflow(self):
         # Ask for filename
         filename = filedialog.askopenfilename(
@@ -654,7 +370,7 @@ class WorkflowBuilder:
             commands_frame = group_frame.commands_frame
             for i, command_frame in enumerate(commands_frame.winfo_children()):
                 self.update_workflow_command(g_name, command_frame)
-                
+                    
                 # Special handling for values that need conversion
                 if i < len(self.workflow[g_name]):
                     command_data = self.workflow[g_name][i]
@@ -681,7 +397,7 @@ class WorkflowBuilder:
                                 except (ValueError, IndexError):
                                     # If parsing fails, keep original format
                                     pass
-                        
+                            
                         # Convert threshold from string to float
                         if 'threshold' in command_data['args']:
                             threshold_value = command_data['args']['threshold']
@@ -1127,6 +843,27 @@ class WorkflowBuilder:
             messagebox.showerror("Error", f"An error occurred: {e}")
             return None
 
+    def remove_group(self, group_name):
+        # Record for undo
+        if group_name in self.workflow:
+            self.undo_stack.append({
+                'type': 'remove_group',
+                'group_name': group_name,
+                'group_data': self.workflow[group_name].copy()
+            })
+            # Limit undo stack size
+            if len(self.undo_stack) > self.max_undo_stack:
+                self.undo_stack.pop(0)
+                
+        # Remove from workflow
+        if group_name in self.workflow:
+            del self.workflow[group_name]
+        
+        # Remove from UI
+        if group_name in self.groups_frames:
+            self.groups_frames[group_name].destroy()
+            del self.groups_frames[group_name]
+    
     def remove_command(self, group_name, command_frame):
         if group_name not in self.workflow:
             return
@@ -1152,27 +889,6 @@ class WorkflowBuilder:
         
         # Remove from UI
         command_frame.destroy()
-
-    def remove_group(self, group_name):
-        # Record for undo
-        if group_name in self.workflow:
-            self.undo_stack.append({
-                'type': 'remove_group',
-                'group_name': group_name,
-                'group_data': self.workflow[group_name].copy()
-            })
-            # Limit undo stack size
-            if len(self.undo_stack) > self.max_undo_stack:
-                self.undo_stack.pop(0)
-                
-        # Remove from workflow
-        if group_name in self.workflow:
-            del self.workflow[group_name]
-        
-        # Remove from UI
-        if group_name in self.groups_frames:
-            self.groups_frames[group_name].destroy()
-            del self.groups_frames[group_name]
     
     def setup_text_field_tracking(self, entry_widget, field_id):
         """Set up tracking for text field changes for undo functionality"""
@@ -1281,59 +997,6 @@ class WorkflowBuilder:
         # Clear focus by setting focus to the root window
         self.root.focus_set()
     
-    def move_group(self, group_name, direction):
-        """Move a group up or down in the workflow execution order"""
-        # Get all group names in order
-        group_names = list(self.groups_frames.keys())
-        
-        # Find current index of the group
-        try:
-            current_index = group_names.index(group_name)
-        except ValueError:
-            return
-        
-        # Calculate new index based on direction
-        if direction == "up" and current_index > 0:
-            new_index = current_index - 1
-        elif direction == "down" and current_index < len(group_names) - 1:
-            new_index = current_index + 1
-        else:
-            return  # Can't move further in that direction
-        
-        # Swap groups in the UI
-        group_frames = list(self.groups_frames.values())
-        
-        # Get the group before which we need to grid our moved group
-        target_frame = group_frames[new_index]
-        
-        # Get current grid info for both frames
-        current_frame = group_frames[current_index]
-        
-        # Store grid info (row numbers)
-        current_row = current_frame.grid_info()['row']
-        target_row = target_frame.grid_info()['row']
-        
-        # Re-grid the frames
-        current_frame.grid(row=target_row, column=0, sticky="ew", padx=5, pady=5)
-        target_frame.grid(row=current_row, column=0, sticky="ew", padx=5, pady=5)
-        
-        # Update the order in the groups_frames dict by recreating it
-        # (This preserves the order for future operations)
-        reordered_groups = {}
-        for i, name in enumerate(group_names):
-            if i == new_index:
-                reordered_groups[group_name] = self.groups_frames[group_name]
-            elif name == group_name:
-                reordered_groups[group_names[new_index]] = self.groups_frames[group_names[new_index]]
-            else:
-                reordered_groups[name] = self.groups_frames[name]
-        
-        # Update the groups_frames dict
-        self.groups_frames = reordered_groups
-        
-        # Update the visual look to indicate the move
-        self.flash_widget(current_frame)
-    
     def flash_widget(self, widget, flash_count=1):
         """Briefly highlight a widget to provide visual feedback for move operations"""
         original_bg = widget.cget("background")
@@ -1354,18 +1017,88 @@ class WorkflowBuilder:
         
         flash_cycle(flash_count)
     
+    def move_group(self, group_name, direction):
+        """Move a group up or down in the workflow execution order"""
+        # Get all group names in order
+        group_names = list(self.workflow.keys())
+        
+        # Find current index of the group
+        try:
+            current_index = group_names.index(group_name)
+        except ValueError:
+            return
+        
+        # Calculate new index based on direction
+        if direction == "up" and current_index > 0:
+            new_index = current_index - 1
+        elif direction == "down" and current_index < len(group_names) - 1:
+            new_index = current_index + 1
+        else:
+            return  # Can't move further in that direction
+        
+        # Get the target group name
+        target_group_name = group_names[new_index]
+        
+        # Create a new ordered workflow to maintain the correct sequence
+        new_workflow = {}
+        for i, name in enumerate(group_names):
+            if i == new_index:
+                if direction == "up":
+                    new_workflow[group_name] = self.workflow[group_name]
+                    new_workflow[target_group_name] = self.workflow[target_group_name]
+                else:  
+                    new_workflow[target_group_name] = self.workflow[target_group_name]
+                    new_workflow[group_name] = self.workflow[group_name]
+            elif i == current_index:
+                continue
+            else:
+                new_workflow[name] = self.workflow[name]
+        
+        # Update the workflow dictionary with the new order
+        self.workflow = new_workflow
+        
+        # Collect all the frames in their current grid positions
+        frames_with_positions = []
+        for name, frame in self.groups_frames.items():
+            frames_with_positions.append((name, frame, frame.grid_info()['row']))
+        
+        # Sort frames by their current row position
+        frames_with_positions.sort(key=lambda x: x[2])
+        
+        # Rearrange the groups_frames dictionary to match the new workflow order
+        self.groups_frames = {name: self.groups_frames[name] for name in new_workflow.keys()}
+        
+        # Re-grid all frames in the correct order
+        for i, (name, frame, _) in enumerate(frames_with_positions):
+            if name == group_name:
+                # Move this frame to the new index position
+                frame.grid(row=new_index, column=0, sticky="ew", padx=5, pady=5)
+            elif name == target_group_name:
+                # Move the target frame to the current index position
+                frame.grid(row=current_index, column=0, sticky="ew", padx=5, pady=5)
+            else:
+                # Keep other frames in their original positions
+                frame.grid(row=i, column=0, sticky="ew", padx=5, pady=5)
+        
+        # Visual feedback for the moved frame
+        self.flash_widget(self.groups_frames[group_name])
+
     def move_command(self, group_name, command_frame, direction):
-        """Move a command up or down within its group"""
+        """
+        Final solution for moving commands up/down within a group
+        Uses direct array manipulation and complete UI refresh
+        """
         if group_name not in self.workflow or group_name not in self.groups_frames:
             return
         
         # Get the commands frame for this group
         commands_frame = self.groups_frames[group_name].commands_frame
         
-        # Get all command frames
+        # Get all command frames in current order
         command_frames = commands_frame.winfo_children()
+        frame_count = len(command_frames)
         
-        # Find the current index of the command
+        # Find the current index of the command to move
         try:
             current_index = command_frames.index(command_frame)
         except ValueError:
@@ -1377,27 +1110,592 @@ class WorkflowBuilder:
         elif direction == "down" and current_index < len(command_frames) - 1:
             new_index = current_index + 1
         else:
-            return  # Can't move further in that direction
+            return
         
-        # Update the workflow data structure
-        self.update_workflow_command(group_name, command_frame)  # Ensure command data is current
-        command_data = self.workflow[group_name][current_index]
+        # Update all workflow data before making changes
+        for i, cmd_frame in enumerate(command_frames):
+            self.update_workflow_command(group_name, cmd_frame)
         
-        # Remove from old position and insert at new position
-        self.workflow[group_name].pop(current_index)
-        self.workflow[group_name].insert(new_index, command_data)
+        # Print current workflow data
+        for i, cmd in enumerate(self.workflow[group_name]):
+            cmd_info = f"{cmd.get('command')}"
+            args = cmd.get('args', {})
+            if 'keys' in args:
+                cmd_info += f" - keys: {args.get('keys')}"
         
-        # Get the grid info for both frames
-        current_row = command_frame.grid_info()['row']
-        target_row = command_frames[new_index].grid_info()['row']
+        # Create a reordered copy of the workflow data
+        reordered_workflow = self.workflow[group_name].copy()
         
-        # Re-grid the command frames
-        command_frame.grid(row=target_row, column=0, sticky="ew", padx=5, pady=2)
-        command_frames[new_index].grid(row=current_row, column=0, sticky="ew", padx=5, pady=2)
+        # Move the command in the reordered workflow
+        command_data = reordered_workflow.pop(current_index)
+        reordered_workflow.insert(new_index, command_data)
         
-        # Visual feedback
-        self.flash_widget(command_frame)
+        # Update the workflow with the reordered data
+        self.workflow[group_name] = reordered_workflow
+        
+        # Print reordered workflow data
+        for i, cmd in enumerate(self.workflow[group_name]):
+            cmd_info = f"{cmd.get('command')}"
+            args = cmd.get('args', {})
+            if 'keys' in args:
+                cmd_info += f" - keys: {args.get('keys')}"
 
+        for frame in command_frames:
+            frame.destroy()
+        
+        # Rebuild all commands from scratch with the updated data
+        built_frames = []
+        moved_frame = None
+        
+        for i, cmd_data in enumerate(reordered_workflow):
+            new_frame = self.add_command(group_name, cmd_data)
+            built_frames.append(new_frame)
+            
+            # If this is the moved command, track the new frame
+            if i == new_index:
+                moved_frame = new_frame
+                        
+        # Apply visual feedback to the moved command
+        if moved_frame:
+            self.flash_widget(moved_frame)
+
+    def copy_group(self, group_name):
+        """Copy a group and append it to the bottom of the workflow"""
+        if group_name not in self.workflow:
+            return
+        
+        # Update all commands in the group to ensure data is current
+        commands_frame = self.groups_frames[group_name].commands_frame
+        for command_frame in commands_frame.winfo_children():
+            self.update_workflow_command(group_name, command_frame)
+        
+        # Create a copy of the group with a new name
+        new_group_name = f"{group_name} (Copy)"
+        
+        # Add the new group with the copied data
+        self.add_group(name=new_group_name, group_data=self.workflow[group_name])
+        
+        # Add visual feedback
+        self.flash_widget(self.groups_frames[new_group_name])
+        
+        return new_group_name
+
+    def copy_command(self, group_name, command_frame):
+        """Copy a command and append it to the end of its group"""
+        if group_name not in self.workflow or group_name not in self.groups_frames:
+            return
+        
+        # Get the commands frame for this group
+        commands_frame = self.groups_frames[group_name].commands_frame
+        
+        # Find the index of the command to copy
+        command_index = self.get_command_index(group_name, command_frame)
+        if command_index < 0:
+            return
+        
+        # Ensure the command data is up to date
+        self.update_workflow_command(group_name, command_frame)
+        
+        # Get the command data to copy
+        if command_index >= len(self.workflow[group_name]):
+            # Command might not be in the workflow yet
+            return
+        
+        import copy
+        command_data = copy.deepcopy(self.workflow[group_name][command_index])
+        
+        # Add the command copy to the end of the group
+        new_command_frame = self.add_command(group_name, command_data)
+        
+        # Add visual feedback
+        self.flash_widget(new_command_frame)
+        
+        return new_command_frame
+
+    def add_command(self, group_name, command_data=None):
+        if group_name not in self.workflow or group_name not in self.groups_frames:
+            return
+        
+        # Get the commands frame for this group
+        commands_frame = self.groups_frames[group_name].commands_frame
+        
+        # Create command frame
+        command_frame = tk.Frame(commands_frame, bd=1, relief=tk.SOLID)
+        row_index = len(commands_frame.winfo_children())
+        command_frame.grid(row=row_index, column=0, sticky="ew", padx=5, pady=2)
+        command_frame.grid_columnconfigure(1, weight=1)
+        
+        # Calculate window width for relative sizing
+        window_width = self.root.winfo_width()
+        dropdown_width = max(15, int(window_width * 0.02))  # Use relative sizing
+        
+        # Command type dropdown
+        command_types = [
+            "", "Send Hotkey", "Keyboard Type", "Keyboard Press", 
+            "OpenURL", "Click Element", "Check by Image", 
+            "Check by Image And Move", "Mouse Click", "Mouse Move", 
+            "Connect Driver", "Pause"
+        ]
+        
+        command_var = tk.StringVar()
+        command_dropdown = ttk.Combobox(command_frame, textvariable=command_var, 
+                                        values=command_types, width=dropdown_width)
+        command_dropdown.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        
+        # Disable mousewheel scrolling on the combobox
+        def block_mousewheel(event):
+            return "break"  # Prevent the default behavior
+        
+        command_dropdown.bind("<MouseWheel>", block_mousewheel)
+        command_dropdown.bind("<Button-4>", block_mousewheel)  # For Linux
+        command_dropdown.bind("<Button-5>", block_mousewheel)  # For Linux
+        
+        # Args frame - will be populated when command type changes
+        args_frame = tk.Frame(command_frame)
+        args_frame.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        
+        # Command buttons
+        buttons_frame = tk.Frame(command_frame)
+        buttons_frame.grid(row=0, column=2, padx=5, pady=5, sticky="e")
+        
+        # Calculate button sizes based on window width
+        btn_width = max(4, int(window_width * 0.06 / 10))  # Scale button width
+        small_btn_width = max(2, int(window_width * 0.03 / 10))  # For up/down buttons
+        
+        # Test command button
+        tk.Button(buttons_frame, text="Test", width=btn_width, command=lambda: self.test_workflow(
+            group_name=group_name, 
+            command_index=self.get_command_index(group_name, command_frame)
+        )).grid(row=0, column=0, padx=2)
+
+        # Copy command button
+        tk.Button(buttons_frame, text="Copy", width=btn_width, command=lambda: self.copy_command(
+            group_name, command_frame
+        )).grid(row=0, column=1, padx=2)
+
+        # Remove button
+        tk.Button(buttons_frame, text="Remove", width=btn_width, command=lambda: self.remove_command(
+            group_name, command_frame
+        )).grid(row=0, column=2, padx=2)
+
+        # Up button
+        tk.Button(buttons_frame, text="↑", width=small_btn_width, command=lambda: self.move_command(
+            group_name, command_frame, "up"
+        )).grid(row=0, column=3, padx=2)
+
+        # Down button
+        tk.Button(buttons_frame, text="↓", width=small_btn_width, command=lambda: self.move_command(
+            group_name, command_frame, "down"
+        )).grid(row=0, column=4, padx=2)
+        
+        # Store the args frame reference
+        command_frame.args_frame = args_frame
+        
+        # Bind command selection event
+        command_dropdown.bind("<<ComboboxSelected>>", lambda e: self.update_command_args(group_name, command_frame, command_var.get()))
+        
+        # If loading from saved data
+        if command_data:
+            command_var.set(command_data.get('command', ''))
+            args = command_data.get('args', {})
+            if not isinstance(args, dict):
+                args = {}
+            self.update_command_args(group_name, command_frame, command_var.get(), args)
+        
+        return command_frame
+
+    def update_command_args(self, group_name, command_frame, command_type, saved_args=None):
+        """Updates command arguments UI using ratio-based widths instead of fixed widths"""
+        # Clear previous args widgets
+        args_frame = command_frame.args_frame
+        for widget in args_frame.winfo_children():
+            widget.destroy()
+        
+        # Ensure saved_args is a dictionary
+        if saved_args is None:
+            saved_args = {}
+        elif not isinstance(saved_args, dict):
+            saved_args = {}
+        
+        # Calculate window width for relative sizing
+        window_width = self.root.winfo_width()
+        
+        # Define relative widths 
+        tiny_width = max(5, int(window_width * 0.01))      # For small inputs like numbers
+        small_width = max(10, int(window_width * 0.03))    # For shorter inputs
+        medium_width = max(20, int(window_width * 0.08))   # For medium inputs
+        large_width = max(40, int(window_width * 0.20))    # For longer inputs
+        full_width = max(100, int(window_width * 0.35))    # For very long inputs like URLs or paths
+        
+        # Add appropriate input fields based on command type
+        arg_widgets = []
+        
+        if command_type == "Send Hotkey":
+            lbl = tk.Label(args_frame, text="Keys (comma-separated):")
+            lbl.pack(side=tk.LEFT, padx=2)
+            entry = tk.Entry(args_frame, width=medium_width)
+            entry.pack(side=tk.LEFT, padx=2)
+            arg_widgets.append(("keys", entry))
+            # Add undo tracking for this field
+            field_id = f"cmd_{id(command_frame)}_{group_name}_keys"
+            self.setup_text_field_tracking(entry, field_id)
+                
+        elif command_type == "Keyboard Type":
+            lbl = tk.Label(args_frame, text="Text to type:")
+            lbl.pack(side=tk.LEFT, padx=2)
+            entry = tk.Entry(args_frame, width=full_width)
+            entry.pack(side=tk.LEFT, padx=2)
+            arg_widgets.append(("text", entry))
+            # Add undo tracking
+            field_id = f"cmd_{id(command_frame)}_{group_name}_text"
+            self.setup_text_field_tracking(entry, field_id)
+                
+        elif command_type == "Keyboard Press":
+            lbl = tk.Label(args_frame, text="Key to press:")
+            lbl.pack(side=tk.LEFT, padx=2)
+            entry = tk.Entry(args_frame, width=small_width)
+            entry.pack(side=tk.LEFT, padx=2)
+            arg_widgets.append(("key", entry))
+            # Add undo tracking
+            field_id = f"cmd_{id(command_frame)}_{group_name}_key"
+            self.setup_text_field_tracking(entry, field_id)
+                
+        elif command_type == "OpenURL":
+            lbl = tk.Label(args_frame, text="URL:")
+            lbl.pack(side=tk.LEFT, padx=2)
+            entry = tk.Entry(args_frame, width=full_width)
+            entry.pack(side=tk.LEFT, padx=2)
+            arg_widgets.append(("url", entry))
+            # Add undo tracking
+            field_id = f"cmd_{id(command_frame)}_{group_name}_url"
+            self.setup_text_field_tracking(entry, field_id)
+                
+        elif command_type == "Click Element":
+            lbl = tk.Label(args_frame, text="XPath:")
+            lbl.pack(side=tk.LEFT, padx=2)
+            entry = tk.Entry(args_frame, width=full_width)
+            entry.pack(side=tk.LEFT, padx=2)
+            arg_widgets.append(("full_x_path", entry))
+            # Add undo tracking
+            field_id = f"cmd_{id(command_frame)}_{group_name}_xpath"
+            self.setup_text_field_tracking(entry, field_id)
+                
+        elif command_type in ["Check by Image", "Check by Image And Move"]:
+            lbl = tk.Label(args_frame, text="Image Path:")
+            lbl.pack(side=tk.LEFT, padx=2)
+            entry = tk.Entry(args_frame, width=large_width)
+            entry.pack(side=tk.LEFT, padx=2)
+            browse_btn = tk.Button(args_frame, text="Browse", command=lambda e=entry: self.browse_image(e))
+            browse_btn.pack(side=tk.LEFT, padx=2)
+            arg_widgets.append(("img_path", entry))
+            # Add undo tracking
+            field_id = f"cmd_{id(command_frame)}_{group_name}_img_path"
+            self.setup_text_field_tracking(entry, field_id)
+                
+            # Add ROI field
+            roi_lbl = tk.Label(args_frame, text="Check Region:")
+            roi_lbl.pack(side=tk.LEFT, padx=2)
+            roi_entry = tk.Entry(args_frame, width=medium_width)
+            roi_entry.pack(side=tk.LEFT, padx=2)
+            arg_widgets.append(("roi", roi_entry))
+            # Add undo tracking
+            field_id = f"cmd_{id(command_frame)}_{group_name}_roi"
+            self.setup_text_field_tracking(roi_entry, field_id)
+                
+            # Add Threshold field
+            threshold_lbl = tk.Label(args_frame, text="Threshold:")
+            threshold_lbl.pack(side=tk.LEFT, padx=2)
+            threshold_entry = tk.Entry(args_frame, width=tiny_width)
+            threshold_entry.insert(0, "0.8")  # Default threshold value
+            threshold_entry.pack(side=tk.LEFT, padx=2)
+            arg_widgets.append(("threshold", threshold_entry))
+            # Add undo tracking
+            field_id = f"cmd_{id(command_frame)}_{group_name}_threshold"
+            self.setup_text_field_tracking(threshold_entry, field_id)
+                
+        elif command_type == "Mouse Move":
+            lbl_x = tk.Label(args_frame, text="X:")
+            lbl_x.pack(side=tk.LEFT, padx=2)
+            entry_x = tk.Entry(args_frame, width=tiny_width)
+            entry_x.pack(side=tk.LEFT, padx=2)
+                
+            lbl_y = tk.Label(args_frame, text="Y:")
+            lbl_y.pack(side=tk.LEFT, padx=2)
+            entry_y = tk.Entry(args_frame, width=tiny_width)
+            entry_y.pack(side=tk.LEFT, padx=2)
+                
+            arg_widgets.append(("x", entry_x))
+            arg_widgets.append(("y", entry_y))
+            # Add undo tracking
+            field_id_x = f"cmd_{id(command_frame)}_{group_name}_x"
+            field_id_y = f"cmd_{id(command_frame)}_{group_name}_y"
+            self.setup_text_field_tracking(entry_x, field_id_x)
+            self.setup_text_field_tracking(entry_y, field_id_y)
+            
+        elif command_type == "Pause":
+            # Add Pause duration field
+            lbl = tk.Label(args_frame, text="Duration (seconds):")
+            lbl.pack(side=tk.LEFT, padx=2)
+            entry = tk.Entry(args_frame, width=tiny_width)
+            entry.insert(0, "1.0")  # Default duration of 1 second
+            entry.pack(side=tk.LEFT, padx=2)
+            arg_widgets.append(("duration", entry))
+            # Add undo tracking
+            field_id = f"cmd_{id(command_frame)}_{group_name}_duration"
+            self.setup_text_field_tracking(entry, field_id)
+        
+        # Store arg widgets reference for saving
+        command_frame.arg_widgets = arg_widgets
+        
+        # Fill with saved values if provided
+        if saved_args:
+            for key, widget in arg_widgets:
+                if key in saved_args:
+                    widget.delete(0, tk.END)  # Clear any default values first
+                    if isinstance(saved_args[key], list):
+                        if key == 'roi':  # Handle ROI list differently
+                            widget.insert(0, ", ".join(map(str, saved_args[key])))
+                        else:
+                            widget.insert(0, ",".join(map(str, saved_args[key])))
+                    else:
+                        widget.insert(0, str(saved_args[key]))
+        
+        # Record command type change for undo if this is an update to an existing command
+        group_commands = self.groups_frames[group_name].commands_frame.winfo_children()
+        index = group_commands.index(command_frame)
+        if 0 <= index < len(self.workflow[group_name]):
+            old_command = self.workflow[group_name][index].get('command', '')
+            if old_command != command_type and old_command:  # Only record if changing from a non-empty type
+                self.undo_stack.append({
+                    'type': 'command_type_change',
+                    'group_name': group_name,
+                    'command_index': index,
+                    'old_type': old_command,
+                    'old_args': self.workflow[group_name][index].get('args', {}),
+                    'new_type': command_type
+                })
+                # Limit undo stack size
+                if len(self.undo_stack) > self.max_undo_stack:
+                    self.undo_stack.pop(0)
+        
+        # Add command to workflow if it's not already there
+        self.update_workflow_command(group_name, command_frame)
+
+    def add_group(self, name=None, is_loading=False, group_data=None):
+        """
+        Add a new group to the workflow with collapsible/expandable functionality
+        
+        Args:
+            name: Name of the group (generated if not provided)
+            is_loading: Flag indicating if loading from saved data
+            group_data: Data for the group commands (for copying)
+        """
+        if not name:
+            name = f"Group {len(self.workflow) + 1}"
+        
+        # Handle duplicate group names
+        if not is_loading and name in self.workflow:
+            # For copies, add a suffix
+            original_name = name
+            suffix = 1
+            while name in self.workflow:
+                name = f"{original_name} (Copy {suffix})"
+                suffix += 1
+        
+        # Initialize group in workflow
+        self.workflow[name] = self.workflow.get(name, [])
+        
+        # If copying, use the provided group data
+        if group_data:
+            import copy
+            self.workflow[name] = copy.deepcopy(group_data)
+        
+        # Create group frame
+        group_frame = tk.LabelFrame(self.groups_container, text="", bd=2, relief=tk.GROOVE)
+        group_frame.grid(row=len(self.groups_frames), column=0, sticky="ew", padx=5, pady=5)
+        self.groups_frames[name] = group_frame
+        
+        group_frame.grid_columnconfigure(0, weight=1)
+        
+        # Group header frame
+        header_frame = tk.Frame(group_frame)
+        header_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        header_frame.grid_columnconfigure(0, weight=0)
+        for i in range(1, 8):  # Added one more column for collapse/expand button
+            header_frame.grid_columnconfigure(i, weight=1)
+        
+        # Calculate window width for relative sizing
+        window_width = self.root.winfo_width()
+        name_width = max(15, int(window_width * 0.02))  # Use relative sizing
+        
+        # Group name entry
+        name_var = tk.StringVar(value=name)
+        name_entry = tk.Entry(header_frame, textvariable=name_var, width=name_width)
+        
+        name_entry.grid(row=0, column=0, padx=5, sticky="w")
+        name_entry.bind("<FocusOut>", lambda e, old_name=name: self.update_group_name(old_name, name_var.get()))
+        
+        # Add undo tracking for group name
+        field_id = f"group_name_{id(group_frame)}_{name}"
+        self.setup_text_field_tracking(name_entry, field_id)
+        
+        # Store expanded state
+        group_frame.expanded = tk.BooleanVar(value=True)
+        
+        # Toggle button for collapsing/expanding
+        toggle_button = tk.Button(
+            header_frame, 
+            text="▼", 
+            width=2,
+            command=lambda: self.toggle_group_expansion(name)
+        )
+        toggle_button.grid(row=0, column=1, padx=5, sticky="w")
+        
+        # Store reference to toggle button for updating its text
+        group_frame.toggle_button = toggle_button
+        
+        # Calculate button sizes based on window width
+        btn_width = max(7, int(window_width * 0.1 / 10))  # Scale button width
+        small_btn_width = max(2, int(window_width * 0.05 / 10))  # For up/down buttons
+        
+        # Group buttons
+        btn_commands = [
+            ("Add Command", lambda: self.add_command(name), btn_width),
+            ("Test Group", lambda: self.test_workflow(group_name=name), btn_width),
+            ("Copy Group", lambda: self.copy_group(name), btn_width),
+            ("Remove Group", lambda: self.remove_group(name), btn_width),
+            ("↑", lambda: self.move_group(name, direction="up"), small_btn_width),
+            ("↓", lambda: self.move_group(name, direction="down"), small_btn_width)
+        ]
+
+        for i, (text, command, width) in enumerate(btn_commands):
+            tk.Button(header_frame, text=text, command=command, 
+                    width=width).grid(
+                row=0, column=i+2, padx=5, sticky="w"
+            )
+        
+        # Commands container frame
+        commands_frame = tk.Frame(group_frame)
+        commands_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
+        commands_frame.grid_columnconfigure(0, weight=1)
+        
+        # Store the commands frame reference in the group frame
+        group_frame.commands_frame = commands_frame
+        
+        # Record group creation for undo if not loading an existing group
+        if not is_loading:
+            self.undo_stack.append({
+                'type': 'group_create',
+                'group_name': name
+            })
+            # Limit undo stack size
+            if len(self.undo_stack) > self.max_undo_stack:
+                self.undo_stack.pop(0)
+        
+        return group_frame
+
+    def toggle_group_expansion(self, group_name):
+        """Toggle the expanded/collapsed state of a group"""
+        if group_name not in self.groups_frames:
+            return
+        
+        group_frame = self.groups_frames[group_name]
+        
+        # Toggle the expanded state
+        group_frame.expanded.set(not group_frame.expanded.get())
+        
+        # Get the commands frame
+        commands_frame = group_frame.commands_frame
+        
+        if group_frame.expanded.get():
+            # Show the commands frame
+            commands_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
+            # Update button text
+            group_frame.toggle_button.config(text="▼")
+        else:
+            # Hide the commands frame
+            commands_frame.grid_forget()
+            # Update button text
+            group_frame.toggle_button.config(text="►")
+        
+        # Update the scroll region after toggle
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def add_open_chrome_button(self):
+        """Add a button that creates a workflow group for opening Chrome using ratio-based sizing"""
+        # Calculate window width for relative sizing
+        window_width = self.root.winfo_width()
+        button_width = max(10, int(window_width * 0.06 / 10))  # Scale button width
+        
+        # Add the button next to the other top buttons
+        open_chrome_btn = tk.Button(
+            self.button_frame, 
+            text="Add Chrome Group", 
+            command=self.add_chrome_group,
+            width=button_width
+        )
+        
+        # Calculate the column to place the button (after existing buttons)
+        next_column = len(self.button_frame.grid_slaves(row=0))
+        open_chrome_btn.grid(row=0, column=next_column, padx=5, pady=5, sticky="ew")
+        self.button_frame.grid_columnconfigure(next_column, weight=1)
+
+    def add_chrome_group(self):
+        """Add a predefined group with Chrome launch commands and customizable profile"""
+        # Create a group name that doesn't exist yet
+        group_name = "Open Chrome"
+        suffix = 1
+        while group_name in self.workflow:
+            group_name = f"Open Chrome {suffix}"
+            suffix += 1
+        
+        # Create the group
+        group_frame = self.add_group(group_name)
+        
+        # Add the commands to open Chrome
+        commands = [
+            {
+                "command": "Send Hotkey",
+                "args": {
+                    "keys": ["win", "r"]
+                }
+            },
+            {
+                "command": "Keyboard Type",
+                "args": {
+                    "text": "cmd"
+                }
+            },
+            {
+                "command": "Keyboard Press",
+                "args": {
+                    "key": "enter"
+                }
+            },
+            {
+                "command": "Keyboard Type",
+                "args": {
+                    "text": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --remote-debugging-port=9222 --profile-directory=\"Profile 1\""
+                }
+            },
+            {
+                "command": "Keyboard Press",
+                "args": {
+                    "key": "enter"
+                }
+            },
+            {
+                "command": "Connect Driver"
+            }
+        ]
+        
+        # Add each command to the group
+        for command_data in commands:
+            self.add_command(group_name, command_data)
+        
+        # Give visual feedback that group was added
+        self.flash_widget(group_frame)
+        
 if __name__ == "__main__":
     root = tk.Tk()
     app = WorkflowBuilder(root)

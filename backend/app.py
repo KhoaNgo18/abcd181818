@@ -280,7 +280,8 @@ def main(json_file):
                 send_hotkey(*args.get("keys"))
             elif command == "Connect Driver":
                 driver = connect_driver()
-            
+            elif command == "Pause":
+                time.sleep(args.get("duration", 1))
             print(f"Done with: {command}")
             time.sleep(1)
     print('Done with all commands')
