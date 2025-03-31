@@ -47,13 +47,13 @@ class WorkflowBuilder:
             (3840, 2160): {
                 'font_tiny': 10,
                 'font_small': 12,
-                'font_large': 14,
+                'font_large': 16,
                 'main_width': 3000,
                 'main_height': 1440,
-                'get_mouse_width': 300,
-                'get_mouse_height': 400,
-                'select_roi_width': 300,
-                'select_roi_height': 400,
+                'get_mouse_width': 500,
+                'get_mouse_height': 500,
+                'select_roi_width': 600,
+                'select_roi_height': 350,
                 'button_small_command': 5,
                 'button_large_command': 10,
                 'button_small_group': 8,
@@ -1000,7 +1000,7 @@ class WorkflowBuilder:
             coordinates_label = tk.Label(
                 position_window, 
                 textvariable=coordinates_var,
-                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small']),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_large']),
                 height=2,
                 bg=self.colors["bg"],
                 fg=self.colors["fg"]
@@ -1009,7 +1009,7 @@ class WorkflowBuilder:
             instructions = tk.Label(
                 position_window,
                 text="Press ANY KEY to capture the current position",
-                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small']),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_large']),
                 wraplength=380,
                 bg=self.colors["bg"],
                 fg=self.colors["fg"]
@@ -1019,7 +1019,7 @@ class WorkflowBuilder:
             status_label = tk.Label(
                 position_window,
                 textvariable=status_var,
-                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small']),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_large']),
                 fg=self.colors["accent"],
                 bg=self.colors["bg"],
                 wraplength=380
@@ -1202,7 +1202,7 @@ class WorkflowBuilder:
             tk.Label(
                 result_window, 
                 text="Selected Region of Interest (ROI):", 
-                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], "bold"),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_large'], "bold"),
                 bg=self.colors["bg"],
                 fg=self.colors["fg"]
             ).pack(pady=10)
@@ -1211,7 +1211,7 @@ class WorkflowBuilder:
             tk.Label(
                 result_window,
                 text=roi_text,
-                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small']),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_large']),
                 bg=self.colors["bg"],
                 fg=self.colors["highlight"]
             ).pack(pady=5)
@@ -1223,7 +1223,7 @@ class WorkflowBuilder:
             tk.Label(
                 result_window,
                 text=image_info,
-                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small']),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_large']),
                 justify=tk.LEFT,
                 bg=self.colors["bg"],
                 fg=self.colors["fg"]
@@ -1239,7 +1239,7 @@ class WorkflowBuilder:
                 result_window,
                 text="Copy ROI to Clipboard",
                 command=copy_roi,
-                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small']),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_large']),
                 bg=self.colors["button_bg"],
                 fg=self.colors["button_fg"],
                 activebackground=self.colors["highlight"],
