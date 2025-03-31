@@ -43,6 +43,39 @@ class WorkflowBuilder:
             "header_bg": "#202020",     # Header background
         }
         
+        self.geometries = {
+            (3840, 2160): {
+                'font_tiny': 10,
+                'font_small': 12,
+                'font_large': 14,
+                'main_width': 3000,
+                'main_height': 1440,
+                'get_mouse_width': 300,
+                'get_mouse_height': 400,
+                'select_roi_width': 300,
+                'select_roi_height': 400,
+                'button_small_command': 5,
+                'button_large_command': 10,
+                'button_small_group': 8,
+                'button_large_group': 15,
+                'emergency_width': 300,
+                'emergency_height': 100,
+                'show_emergency_ui_x': 20,
+                'show_emergency_ui_y': 20,
+                'show_result_width': 2500,
+                'show_result_height': 1000,
+                'group_name_width': 30,
+                'command_name_width': 25,
+                'update_command_args_tiny_width': 7,
+                'update_command_args_small_width': 15,
+                'update_command_args_medium_width': 20,
+                'update_command_args_large_width': 40,
+                'button_largupdate_command_args_max_width': 100,
+                },
+            (1920, 1080): {},
+            (2560, 1440): {},
+        }
+        
         self.root = root
         self.root.title("Workflow Builder - Dark Theme")
         
@@ -58,14 +91,8 @@ class WorkflowBuilder:
         screen_height = root.winfo_screenheight()
         
         # Set window size as a percentage of screen dimensions
-        window_width = int(screen_width * 0.85) 
-        window_height = int(screen_height * 0.85)
-        
-        # Set minimum size to ensure UI elements are always visible
-        min_width = 800
-        min_height = 600
-        window_width = max(window_width, min_width)
-        window_height = max(window_height, min_height)
+        window_width = self.geometries[(screen_width, screen_height)]['main_width']
+        window_height = self.geometries[(screen_width, screen_height)]['main_height']
         
         # Position the window in the center of the screen
         position_x = int((screen_width - window_width) / 2)
@@ -73,9 +100,6 @@ class WorkflowBuilder:
         
         # Set window geometry
         self.root.geometry(f"{window_width}x{window_height}+{position_x}+{position_y}")
-        
-        # Make the window resizable with minimum size
-        self.root.minsize(min_width, min_height)
         
         self.root.bind("<Control-z>", self.undo_last_action)
         self.root.bind("<Button-1>", self.clear_focus)
@@ -114,7 +138,8 @@ class WorkflowBuilder:
             ("Load Workflow", self.load_workflow),
             ("Test Workflow", self.test_workflow),
             ("Get Mouse Position", self.get_mouse_position),
-            ("Select ROI", self.select_roi_from_image)
+            ("Select ROI", self.select_roi_from_image),
+            ("Add Chrome Group", self.add_chrome_group),
         ]
         
         for i, (text, command) in enumerate(buttons):
@@ -122,13 +147,11 @@ class WorkflowBuilder:
                      bg=self.colors["button_bg"], fg=self.colors["button_fg"],
                      activebackground=self.colors["highlight"], 
                      activeforeground=self.colors["fg"],
+                     font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                      relief=tk.FLAT, bd=0).grid(
                 row=0, column=i, padx=5, pady=5, sticky="ew"
             )
             self.button_frame.grid_columnconfigure(i, weight=1)
-        
-        # Add the Chrome Group button
-        self.add_open_chrome_button()
         
         # Create canvas with scrollbar
         self.canvas = tk.Canvas(self.main_frame, bg=self.colors["bg"], 
@@ -157,7 +180,7 @@ class WorkflowBuilder:
         # For Linux and Mac (may need further adjustment for Mac)
         self.canvas.bind_all("<Button-4>", lambda e: self.on_mousewheel_linux(e, -1))
         self.canvas.bind_all("<Button-5>", lambda e: self.on_mousewheel_linux(e, 1))
-
+        
     def create_emergency_stop_ui(self):
         """Create a small transparent emergency stop window with just the button"""
         # Create a floating top-level window for the emergency button
@@ -167,12 +190,8 @@ class WorkflowBuilder:
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         
-        window_width = int(screen_width * 0.15)
-        window_height = int(screen_height * 0.07)
-        
-        # Ensure minimum size for readability
-        window_width = max(window_width, 180)
-        window_height = max(window_height, 60)
+        window_width = self.geometries[(screen_width, screen_height)]['emergency_width']
+        window_height = self.geometries[(screen_width, screen_height)]['emergency_height']
         
         # Set the window size
         self.emergency_window.geometry(f"{window_width}x{window_height}")
@@ -196,7 +215,7 @@ class WorkflowBuilder:
         stop_button = tk.Button(
             frame,
             text="EMERGENCY STOP",
-            font=("Arial", int(self.root.winfo_screenheight()*0.02), "bold"),
+            font=("Arial", self.geometries[(screen_width, screen_height)]['font_small'], "bold"),
             command=self.trigger_emergency_pause,
             bg="#ff0000",
             fg="white",
@@ -237,8 +256,9 @@ class WorkflowBuilder:
             screen_width = self.root.winfo_screenwidth()
             screen_height = self.root.winfo_screenheight()
             
-            pos_x = int(screen_width * 0.01)  
-            pos_y = int(screen_height * 0.01)
+            # Set window size as a percentage of screen dimensions
+            pos_x = self.geometries[(screen_width, screen_height)]['show_emergency_ui_x']
+            pos_y = self.geometries[(screen_width, screen_height)]['show_emergency_ui_y']
             
             # Set the position
             self.emergency_window.geometry(f"+{pos_x}+{pos_y}")
@@ -365,43 +385,49 @@ class WorkflowBuilder:
         
         # Configure TCombobox
         style.configure('TCombobox', 
-                      fieldbackground=self.colors["input_bg"],
-                      background=self.colors["input_bg"],
-                      foreground=self.colors["fg"],
-                      arrowcolor=self.colors["fg"],
-                      bordercolor=self.colors["border"])
+                    fieldbackground=self.colors["input_bg"],
+                    background=self.colors["input_bg"],
+                    foreground=self.colors["fg"],
+                    arrowcolor=self.colors["fg"],
+                    bordercolor=self.colors["border"])
         
         # Configure TButton
         style.configure('TButton',
-                      background=self.colors["button_bg"],
-                      foreground=self.colors["fg"],
-                      bordercolor=self.colors["border"],
-                      relief=tk.FLAT)
+                    background=self.colors["button_bg"],
+                    foreground=self.colors["fg"],
+                    bordercolor=self.colors["border"],
+                    relief=tk.FLAT)
         
         # Configure TEntry
         style.configure('TEntry',
-                      fieldbackground=self.colors["input_bg"],
-                      foreground=self.colors["fg"],
-                      bordercolor=self.colors["border"])
+                    fieldbackground=self.colors["input_bg"],
+                    foreground=self.colors["fg"],
+                    bordercolor=self.colors["border"])
         
         # Configure TNotebook
         style.configure('TNotebook',
-                      background=self.colors["bg"],
-                      bordercolor=self.colors["border"])
+                    background=self.colors["bg"],
+                    bordercolor=self.colors["border"])
+        
+        # Configure TNotebook.Tab - this affects all tabs
         style.configure('TNotebook.Tab',
-                      background=self.colors["button_bg"],
-                      foreground=self.colors["fg"],
-                      padding=[10, 2])
+                    background=self.colors["button_bg"],
+                    foreground="#999999",
+                    font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
+                    padding=[10, 2])
+        
+        # Configure selected tab appearance
         style.map('TNotebook.Tab',
-                background=[('selected', self.colors["accent"])])
+                background=[('selected', self.colors["accent"])],
+                foreground=[('selected', "#000000")])  # Bright white text for selected tab
         
         # Configure TScrollbar
         style.configure('TScrollbar',
-                      background=self.colors["button_bg"],
-                      troughcolor=self.colors["bg"],
-                      bordercolor=self.colors["border"],
-                      arrowcolor=self.colors["fg"])
-
+                    background=self.colors["button_bg"],
+                    troughcolor=self.colors["bg"],
+                    bordercolor=self.colors["border"],
+                    arrowcolor=self.colors["fg"])
+        
     def configure_dialog_colors(self):
         """Configure file dialogs and message boxes to use dark theme"""
         # This method should be called in the __init__ method
@@ -413,7 +439,8 @@ class WorkflowBuilder:
         self.root.option_add('*Dialog.msg.foreground', self.colors["fg"])
         
         # For message boxes
-        self.root.option_add('*Dialog.msg.font',f'Arial {int(self.root.winfo_screenheight()*0.005)}')
+        font_size = self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small']
+        self.root.option_add('*Dialog.msg.font',f'Arial {font_size}')
         
         # Set button colors
         self.root.option_add('*Dialog.button.background', self.colors["button_bg"])
@@ -828,7 +855,6 @@ class WorkflowBuilder:
             messagebox.showerror("Error", f"Failed to test workflow: {e}")
             # Reset state
             self.test_running = False
-            self.emergency_pause_btn.config(state=tk.DISABLED)    
     
     def finish_test(self, success, stdout, stderr, test_type):
         """Called when test thread completes to update UI"""
@@ -862,19 +888,20 @@ class WorkflowBuilder:
         result_window.configure(bg=self.colors["bg"])
         
         # Size the result window relative to the main window
-        main_window_width = self.root.winfo_width()
-        main_window_height = self.root.winfo_height()
-        result_window_width = int(main_window_width * 0.8)
-        result_window_height = int(main_window_height * 0.8)
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # Set window size as a percentage of screen dimensions
+        result_window_width = self.geometries[(screen_width, screen_height)]['show_result_width']
+        result_window_height = self.geometries[(screen_width, screen_height)]['show_result_height']
         
         # Position the result window centered relative to the main window
         main_window_x = self.root.winfo_x()
         main_window_y = self.root.winfo_y()
-        result_window_x = main_window_x + int((main_window_width - result_window_width) / 2)
-        result_window_y = main_window_y + int((main_window_height - result_window_height) / 2)
+        result_window_x = main_window_x + int((screen_width - result_window_width) / 2)
+        result_window_y = main_window_y + int((screen_height - result_window_height) / 2)
         
         result_window.geometry(f"{result_window_width}x{result_window_height}+{result_window_x}+{result_window_y}")
-        result_window.minsize(600, 400)  # Set a reasonable minimum size
         
         # Configure grid layout
         result_window.grid_columnconfigure(0, weight=1)
@@ -890,7 +917,7 @@ class WorkflowBuilder:
             text=f"Test {'SUCCEEDED' if success else 'FAILED'}",
             fg="green" if success else self.colors["error"],
             bg=self.colors["bg"],
-            font=("Arial", int(self.root.winfo_screenheight()*0.015), "bold")
+            font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], "bold")
         )
         status_label.grid(row=0, column=0, sticky="w")
         
@@ -910,7 +937,7 @@ class WorkflowBuilder:
                                     troughcolor=self.colors["bg"])
         stdout_scrollbar.grid(row=0, column=1, sticky="ns")
         
-        stdout_text = tk.Text(stdout_frame, wrap=tk.WORD, yscrollcommand=stdout_scrollbar.set,
+        stdout_text = tk.Text(stdout_frame, wrap=tk.WORD, yscrollcommand=stdout_scrollbar.set, font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_large'], 'normal'),
                         bg=self.colors["input_bg"], fg=self.colors["fg"],
                         insertbackground=self.colors["fg"])
         stdout_text.grid(row=0, column=0, sticky="nsew")
@@ -932,7 +959,7 @@ class WorkflowBuilder:
                                         troughcolor=self.colors["bg"])
             stderr_scrollbar.grid(row=0, column=1, sticky="ns")
             
-            stderr_text = tk.Text(stderr_frame, wrap=tk.WORD, yscrollcommand=stderr_scrollbar.set,
+            stderr_text = tk.Text(stderr_frame, wrap=tk.WORD, yscrollcommand=stderr_scrollbar.set, font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_large'], 'normal'),
                             bg=self.colors["input_bg"], fg=self.colors["error"],
                             insertbackground=self.colors["fg"])
             stderr_text.grid(row=0, column=0, sticky="nsew")
@@ -942,7 +969,7 @@ class WorkflowBuilder:
             stderr_text.config(state=tk.DISABLED)
         
         # Close button
-        tk.Button(result_window, text="Close", command=result_window.destroy,
+        tk.Button(result_window, text="Close", command=result_window.destroy, font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
             bg=self.colors["button_bg"], fg=self.colors["button_fg"],
             activebackground=self.colors["highlight"], 
             activeforeground=self.colors["fg"],
@@ -963,12 +990,9 @@ class WorkflowBuilder:
             position_window.title("Mouse Position Tracker")
             screen_width = position_window.winfo_screenwidth()
             screen_height = position_window.winfo_screenheight()
-            window_width = int(screen_width * 0.22)
-            window_height = int(screen_height * 0.3)
-            min_width = 300
-            min_height = 200
-            window_width = max(window_width, min_width)
-            window_height = max(window_height, min_height)
+            window_width = self.geometries[(screen_width, screen_height)]['get_mouse_width']
+            window_height = self.geometries[(screen_width, screen_height)]['get_mouse_height']
+        
             position_window.geometry(f"{window_width}x{window_height}")
             position_window.resizable(True, True)
             position_window.configure(bg=self.colors["bg"])
@@ -976,7 +1000,7 @@ class WorkflowBuilder:
             coordinates_label = tk.Label(
                 position_window, 
                 textvariable=coordinates_var,
-                font=("Arial", int(self.root.winfo_screenheight()*0.02)),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small']),
                 height=2,
                 bg=self.colors["bg"],
                 fg=self.colors["fg"]
@@ -985,7 +1009,7 @@ class WorkflowBuilder:
             instructions = tk.Label(
                 position_window,
                 text="Press ANY KEY to capture the current position",
-                font=("Arial", int(self.root.winfo_screenheight()*0.015)),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small']),
                 wraplength=380,
                 bg=self.colors["bg"],
                 fg=self.colors["fg"]
@@ -995,7 +1019,7 @@ class WorkflowBuilder:
             status_label = tk.Label(
                 position_window,
                 textvariable=status_var,
-                font=("Arial", int(self.root.winfo_screenheight()*0.015)),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small']),
                 fg=self.colors["accent"],
                 bg=self.colors["bg"],
                 wraplength=380
@@ -1052,7 +1076,7 @@ class WorkflowBuilder:
             recapture_button = tk.Button(
                 position_window,
                 text="Capture Again",
-                font=("Arial", int(self.root.winfo_screenheight()*0.015)),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small']),
                 bg=self.colors["button_bg"],
                 fg=self.colors["button_fg"],
                 activebackground=self.colors["highlight"],
@@ -1165,14 +1189,8 @@ class WorkflowBuilder:
             screen_width = result_window.winfo_screenwidth()
             screen_height = result_window.winfo_screenheight()
 
-            window_width = int(screen_width * 0.25)
-            window_height = int(screen_height * 0.20)
-
-            # Set minimum size to ensure UI elements are always visible
-            min_width = 300
-            min_height = 200
-            window_width = max(window_width, min_width)
-            window_height = max(window_height, min_height)
+            window_width = self.geometries[(screen_width, screen_height)]['select_roi_width']
+            window_height = self.geometries[(screen_width, screen_height)]['select_roi_height']
 
             # Set window geometry
             result_window.geometry(f"{window_width}x{window_height}")
@@ -1184,7 +1202,7 @@ class WorkflowBuilder:
             tk.Label(
                 result_window, 
                 text="Selected Region of Interest (ROI):", 
-                font=("Arial", int(self.root.winfo_screenheight()*0.015), "bold"),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], "bold"),
                 bg=self.colors["bg"],
                 fg=self.colors["fg"]
             ).pack(pady=10)
@@ -1193,7 +1211,7 @@ class WorkflowBuilder:
             tk.Label(
                 result_window,
                 text=roi_text,
-                font=("Arial", int(self.root.winfo_screenheight()*0.02)),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small']),
                 bg=self.colors["bg"],
                 fg=self.colors["highlight"]
             ).pack(pady=5)
@@ -1205,7 +1223,7 @@ class WorkflowBuilder:
             tk.Label(
                 result_window,
                 text=image_info,
-                font=("Arial", int(self.root.winfo_screenheight()*0.015)),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small']),
                 justify=tk.LEFT,
                 bg=self.colors["bg"],
                 fg=self.colors["fg"]
@@ -1221,7 +1239,7 @@ class WorkflowBuilder:
                 result_window,
                 text="Copy ROI to Clipboard",
                 command=copy_roi,
-                font=("Arial", int(self.root.winfo_screenheight()*0.015)),
+                font=("Arial", self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small']),
                 bg=self.colors["button_bg"],
                 fg=self.colors["button_fg"],
                 activebackground=self.colors["highlight"],
@@ -1629,9 +1647,7 @@ class WorkflowBuilder:
         command_frame.grid(row=next_row, column=0, sticky="ew", padx=5, pady=2)
         command_frame.grid_columnconfigure(1, weight=1)
         
-        # Calculate window width for relative sizing
-        window_width = self.root.winfo_width()
-        dropdown_width = max(15, int(window_width * 0.02))  # Use relative sizing
+        dropdown_width = self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['command_name_width']
         
         # Command type dropdown
         command_types = [
@@ -1653,6 +1669,7 @@ class WorkflowBuilder:
                     relief=tk.FLAT,
                     bd=0,
                     highlightthickness=1,
+                    font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                     highlightbackground=self.colors["border"])
         
         # Style the dropdown menu itself
@@ -1660,6 +1677,7 @@ class WorkflowBuilder:
                             fg=self.colors["fg"],
                             activebackground=self.colors["highlight"],
                             activeforeground=self.colors["fg"],
+                            font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_tiny'], 'bold'),
                             bd=0)
         
         dropdown.grid(row=0, column=0, padx=5, pady=5, sticky="w")
@@ -1673,65 +1691,44 @@ class WorkflowBuilder:
         buttons_frame.grid(row=0, column=2, padx=5, pady=5, sticky="e")
         
         # Calculate button sizes based on window width
-        btn_width = max(4, int(window_width * 0.06 / 10))  # Scale button width
-        small_btn_width = max(2, int(window_width * 0.03 / 10))  # For up/down buttons
+        btn_width = self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['button_large_command']
+        small_btn_width = self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['button_small_command']
         
-        # Test command button with dark theme
-        tk.Button(buttons_frame, text="Test", width=btn_width, 
-            bg=self.colors["button_bg"],
-            fg=self.colors["button_fg"],
-            activebackground=self.colors["highlight"],
-            activeforeground=self.colors["fg"],
-            relief=tk.FLAT, bd=0,
-            command=lambda: self.test_workflow(
+        common_props = {
+            "bg": self.colors["button_bg"],
+            "fg": self.colors["button_fg"],
+            "activebackground": self.colors["highlight"],
+            "activeforeground": self.colors["fg"],
+            "font": ('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
+            "relief": tk.FLAT,
+            "bd": 0
+        }
+
+        # Define button configurations
+        buttons_config = [
+            {"text": "Test", "width": btn_width, "column": 0, 
+            "command": lambda: self.test_workflow(
                 group_name=group_name, 
-                command_index=self.get_command_index(group_name, command_frame)
-            )).grid(row=0, column=0, padx=2)
+                command_index=self.get_command_index(group_name, command_frame))},
+            {"text": "Copy", "width": btn_width, "column": 1,
+            "command": lambda: self.copy_command(group_name, command_frame)},
+            {"text": "Remove", "width": btn_width, "column": 2,
+            "command": lambda: self.remove_command(group_name, command_frame)},
+            {"text": "↑", "width": small_btn_width, "column": 3,
+            "command": lambda: self.move_command(group_name, command_frame, "up")},
+            {"text": "↓", "width": small_btn_width, "column": 4,
+            "command": lambda: self.move_command(group_name, command_frame, "down")}
+        ]
 
-        # Copy command button
-        tk.Button(buttons_frame, text="Copy", 
-            width=btn_width,
-            bg=self.colors["button_bg"],
-            fg=self.colors["button_fg"],
-            activebackground=self.colors["highlight"],
-            activeforeground=self.colors["fg"],
-            relief=tk.FLAT, bd=0,
-            command=lambda: self.copy_command(
-                group_name, command_frame
-            )).grid(row=0, column=1, padx=2)
-
-        # Remove button
-        tk.Button(buttons_frame, text="Remove", width=btn_width,
-            bg=self.colors["button_bg"],
-            fg=self.colors["button_fg"],
-            activebackground=self.colors["highlight"],
-            activeforeground=self.colors["fg"],
-            relief=tk.FLAT, bd=0,
-            command=lambda: self.remove_command(
-                group_name, command_frame
-            )).grid(row=0, column=2, padx=2)
-
-        # Up button
-        tk.Button(buttons_frame, text="↑", width=small_btn_width, 
-            bg=self.colors["button_bg"],
-            fg=self.colors["button_fg"],
-            activebackground=self.colors["highlight"],
-            activeforeground=self.colors["fg"],
-            relief=tk.FLAT, bd=0,
-            command=lambda: self.move_command(
-                group_name, command_frame, "up"
-            )).grid(row=0, column=3, padx=2)
-
-        # Down button
-        tk.Button(buttons_frame, text="↓", width=small_btn_width, 
-            bg=self.colors["button_bg"],
-            fg=self.colors["button_fg"],
-            activebackground=self.colors["highlight"],
-            activeforeground=self.colors["fg"],
-            relief=tk.FLAT, bd=0,
-            command=lambda: self.move_command(
-                group_name, command_frame, "down"
-            )).grid(row=0, column=4, padx=2)
+        # Create buttons
+        for btn in buttons_config:
+            button_props = common_props.copy()
+            button_props.update(btn)
+            command = button_props.pop("command")
+            column = button_props.pop("column")
+            
+            tk.Button(buttons_frame, command=command, **button_props).grid(
+                row=0, column=column, padx=2)
         
         # Store the args frame reference
         command_frame.args_frame = args_frame
@@ -1769,25 +1766,20 @@ class WorkflowBuilder:
         elif not isinstance(saved_args, dict):
             saved_args = {}
         
-        # Calculate window width for relative sizing
-        window_width = self.root.winfo_width()
+        tiny_width = self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['update_command_args_tiny_width']
+        small_width = self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['update_command_args_small_width']
+        medium_width = self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['update_command_args_medium_width']
+        large_width = self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['update_command_args_large_width']
+        max_width = self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['button_largupdate_command_args_max_width']
         
-        # Define relative widths 
-        tiny_width = max(5, int(window_width * 0.01))      # For small inputs like numbers
-        small_width = max(10, int(window_width * 0.02))    # For shorter inputs
-        medium_width = max(20, int(window_width * 0.05))   # For medium inputs
-        large_width = max(40, int(window_width * 0.1))     # For longer inputs
-        full_width = max(100, int(window_width * 0.15))    # For very long inputs like URLs or paths
-        
-        # Add appropriate input fields based on command type
         arg_widgets = []
         
         if command_type == "Send Hotkey":
-            lbl = tk.Label(args_frame, text="Keys (comma-separated):", 
+            lbl = tk.Label(args_frame, text="Keys (comma-separated):", font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                         bg=self.colors["frame_bg"], fg=self.colors["fg"])
             lbl.pack(side=tk.LEFT, padx=2)
             entry = tk.Entry(args_frame, width=medium_width,
-                        bg=self.colors["input_bg"], fg=self.colors["fg"],
+                        bg=self.colors["input_bg"], fg=self.colors["fg"], font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'normal'),
                         insertbackground=self.colors["fg"])
             entry.pack(side=tk.LEFT, padx=2)
             arg_widgets.append(("keys", entry))
@@ -1796,10 +1788,10 @@ class WorkflowBuilder:
             self.setup_text_field_tracking(entry, field_id)
                 
         elif command_type == "Keyboard Type":
-            lbl = tk.Label(args_frame, text="Text to type:", 
+            lbl = tk.Label(args_frame, text="Text to type:", font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                         bg=self.colors["frame_bg"], fg=self.colors["fg"])
             lbl.pack(side=tk.LEFT, padx=2)
-            entry = tk.Entry(args_frame, width=full_width,
+            entry = tk.Entry(args_frame, width=max_width, font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'normal'),
                         bg=self.colors["input_bg"], fg=self.colors["fg"],
                         insertbackground=self.colors["fg"])
             entry.pack(side=tk.LEFT, padx=2)
@@ -1809,10 +1801,10 @@ class WorkflowBuilder:
             self.setup_text_field_tracking(entry, field_id)
                 
         elif command_type == "Keyboard Press":
-            lbl = tk.Label(args_frame, text="Key to press:", 
+            lbl = tk.Label(args_frame, text="Key to press:", font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                         bg=self.colors["frame_bg"], fg=self.colors["fg"])
             lbl.pack(side=tk.LEFT, padx=2)
-            entry = tk.Entry(args_frame, width=small_width,
+            entry = tk.Entry(args_frame, width=small_width, font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'normal'),
                         bg=self.colors["input_bg"], fg=self.colors["fg"],
                         insertbackground=self.colors["fg"])
             entry.pack(side=tk.LEFT, padx=2)
@@ -1822,10 +1814,10 @@ class WorkflowBuilder:
             self.setup_text_field_tracking(entry, field_id)
                 
         elif command_type == "OpenURL":
-            lbl = tk.Label(args_frame, text="URL:", 
+            lbl = tk.Label(args_frame, text="URL:", font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                         bg=self.colors["frame_bg"], fg=self.colors["fg"])
             lbl.pack(side=tk.LEFT, padx=2)
-            entry = tk.Entry(args_frame, width=full_width,
+            entry = tk.Entry(args_frame, width=max_width, font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'normal'),
                         bg=self.colors["input_bg"], fg=self.colors["fg"],
                         insertbackground=self.colors["fg"])
             entry.pack(side=tk.LEFT, padx=2)
@@ -1835,10 +1827,10 @@ class WorkflowBuilder:
             self.setup_text_field_tracking(entry, field_id)
                 
         elif command_type == "Click Element":
-            lbl = tk.Label(args_frame, text="XPath:", 
+            lbl = tk.Label(args_frame, text="XPath:", font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                         bg=self.colors["frame_bg"], fg=self.colors["fg"])
             lbl.pack(side=tk.LEFT, padx=2)
-            entry = tk.Entry(args_frame, width=full_width,
+            entry = tk.Entry(args_frame, width=max_width, font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'normal'),
                         bg=self.colors["input_bg"], fg=self.colors["fg"],
                         insertbackground=self.colors["fg"])
             entry.pack(side=tk.LEFT, padx=2)
@@ -1848,14 +1840,14 @@ class WorkflowBuilder:
             self.setup_text_field_tracking(entry, field_id)
                 
         elif command_type in ["Check by Image", "Check by Image And Move"]:
-            lbl = tk.Label(args_frame, text="Image Path:", 
+            lbl = tk.Label(args_frame, text="Image Path:", font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                         bg=self.colors["frame_bg"], fg=self.colors["fg"])
             lbl.pack(side=tk.LEFT, padx=2)
-            entry = tk.Entry(args_frame, width=medium_width,
+            entry = tk.Entry(args_frame, width=large_width, font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'normal'),
                         bg=self.colors["input_bg"], fg=self.colors["fg"],
                         insertbackground=self.colors["fg"])
             entry.pack(side=tk.LEFT, padx=2)
-            browse_btn = tk.Button(args_frame, text="Browse", 
+            browse_btn = tk.Button(args_frame, text="Browse", font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                                 bg=self.colors["button_bg"], 
                                 fg=self.colors["button_fg"],
                                 activebackground=self.colors["highlight"],
@@ -1869,10 +1861,10 @@ class WorkflowBuilder:
             self.setup_text_field_tracking(entry, field_id)
                 
             # Add ROI field
-            roi_lbl = tk.Label(args_frame, text="Check Region:", 
+            roi_lbl = tk.Label(args_frame, text="Check Region:", font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                             bg=self.colors["frame_bg"], fg=self.colors["fg"])
             roi_lbl.pack(side=tk.LEFT, padx=2)
-            roi_entry = tk.Entry(args_frame, width=small_width,
+            roi_entry = tk.Entry(args_frame, width=medium_width, font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'normal'),
                             bg=self.colors["input_bg"], fg=self.colors["fg"],
                             insertbackground=self.colors["fg"])
             roi_entry.pack(side=tk.LEFT, padx=2)
@@ -1882,10 +1874,10 @@ class WorkflowBuilder:
             self.setup_text_field_tracking(roi_entry, field_id)
                 
             # Add Threshold field
-            threshold_lbl = tk.Label(args_frame, text="Threshold:", 
+            threshold_lbl = tk.Label(args_frame, text="Threshold:", font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                                 bg=self.colors["frame_bg"], fg=self.colors["fg"])
             threshold_lbl.pack(side=tk.LEFT, padx=2)
-            threshold_entry = tk.Entry(args_frame, width=tiny_width,
+            threshold_entry = tk.Entry(args_frame, width=tiny_width, font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'normal'),
                                     bg=self.colors["input_bg"], fg=self.colors["fg"],
                                     insertbackground=self.colors["fg"])
             threshold_entry.insert(0, "0.8")  # Default threshold value
@@ -1896,18 +1888,18 @@ class WorkflowBuilder:
             self.setup_text_field_tracking(threshold_entry, field_id)
                 
         elif command_type == "Mouse Move":
-            lbl_x = tk.Label(args_frame, text="X:", 
+            lbl_x = tk.Label(args_frame, text="X:", font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                         bg=self.colors["frame_bg"], fg=self.colors["fg"])
             lbl_x.pack(side=tk.LEFT, padx=2)
-            entry_x = tk.Entry(args_frame, width=tiny_width,
+            entry_x = tk.Entry(args_frame, width=tiny_width, font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'normal'),
                             bg=self.colors["input_bg"], fg=self.colors["fg"],
                             insertbackground=self.colors["fg"])
             entry_x.pack(side=tk.LEFT, padx=2)
                 
-            lbl_y = tk.Label(args_frame, text="Y:", 
+            lbl_y = tk.Label(args_frame, text="Y:", font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                         bg=self.colors["frame_bg"], fg=self.colors["fg"])
             lbl_y.pack(side=tk.LEFT, padx=2)
-            entry_y = tk.Entry(args_frame, width=tiny_width,
+            entry_y = tk.Entry(args_frame, width=tiny_width, font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'normal'),
                             bg=self.colors["input_bg"], fg=self.colors["fg"],
                             insertbackground=self.colors["fg"])
             entry_y.pack(side=tk.LEFT, padx=2)
@@ -1922,10 +1914,10 @@ class WorkflowBuilder:
             
         elif command_type == "Pause":
             # Add Pause duration field
-            lbl = tk.Label(args_frame, text="Duration (seconds):", 
+            lbl = tk.Label(args_frame, text="Duration (seconds):", font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                         bg=self.colors["frame_bg"], fg=self.colors["fg"])
             lbl.pack(side=tk.LEFT, padx=2)
-            entry = tk.Entry(args_frame, width=tiny_width,
+            entry = tk.Entry(args_frame, width=tiny_width, font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'normal'),
                         bg=self.colors["input_bg"], fg=self.colors["fg"],
                         insertbackground=self.colors["fg"])
             entry.insert(0, "1.0")  # Default duration of 1 second
@@ -2022,14 +2014,12 @@ class WorkflowBuilder:
         for i in range(1, 8):  # Added one more column for collapse/expand button
             header_frame.grid_columnconfigure(i, weight=1)
         
-        # Calculate window width for relative sizing
-        window_width = self.root.winfo_width()
-        name_width = max(15, int(window_width * 0.02))  # Use relative sizing
+        name_width = self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['group_name_width']
         
         # Group name entry with dark theme colors
         name_var = tk.StringVar(value=name)
         name_entry = tk.Entry(header_frame, textvariable=name_var, width=name_width,
-                        bg=self.colors["input_bg"], fg=self.colors["fg"],
+                        bg=self.colors["input_bg"], fg=self.colors["fg"], font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                         insertbackground=self.colors["fg"])
         
         name_entry.grid(row=0, column=0, padx=5, sticky="w")
@@ -2061,8 +2051,8 @@ class WorkflowBuilder:
         group_frame.toggle_button = toggle_button
         
         # Calculate button sizes based on window width
-        btn_width = max(7, int(window_width * 0.1 / 10))  # Scale button width
-        small_btn_width = max(2, int(window_width * 0.05 / 10))  # For up/down buttons
+        btn_width = self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['button_large_group']
+        small_btn_width = self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['button_small_group']
         
         # Group buttons
         btn_commands = [
@@ -2082,6 +2072,7 @@ class WorkflowBuilder:
                     activebackground=self.colors["highlight"],
                     activeforeground=self.colors["fg"],
                     relief=tk.FLAT,
+                    font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                     bd=0).grid(
                 row=0, column=i+2, padx=5, sticky="w"
             )
@@ -2132,31 +2123,6 @@ class WorkflowBuilder:
         
         # Update the scroll region after toggle
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
-    def add_open_chrome_button(self):
-        """Add a button that creates a workflow group for opening Chrome using ratio-based sizing"""
-        # Calculate window width for relative sizing
-        window_width = self.root.winfo_width()
-        button_width = max(10, int(window_width * 0.06 / 10))  # Scale button width
-        
-        # Add the button next to the other top buttons
-        open_chrome_btn = tk.Button(
-            self.button_frame, 
-            text="Add Chrome Group", 
-            command=self.add_chrome_group,
-            width=button_width,
-            bg=self.colors["button_bg"], 
-            fg=self.colors["button_fg"],
-            activebackground=self.colors["highlight"], 
-            activeforeground=self.colors["fg"],
-            relief=tk.FLAT, 
-            bd=0
-        )
-        
-        # Calculate the column to place the button (after existing buttons)
-        next_column = len(self.button_frame.grid_slaves(row=0))
-        open_chrome_btn.grid(row=0, column=next_column, padx=5, pady=5, sticky="ew")
-        self.button_frame.grid_columnconfigure(next_column, weight=1)
 
     def add_chrome_group(self):
         """Add a predefined group with Chrome launch commands and customizable profile"""
