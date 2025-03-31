@@ -6,16 +6,22 @@ import os
 import sys
 import importlib.util
 import time
- # Try to import required libraries
 import pyautogui
 import threading
 import time
-import keyboard  # For detecting key presses
+import keyboard
 import cv2
 import numpy as np
+import threading
+import ctypes
+from threading import Event
 
 class WorkflowBuilder:
     def __init__(self, root):
+        self.test_running = False
+        self.test_thread = None
+        self.emergency_stop_flag = Event() 
+        
         self.undo_stack = []
         self.max_undo_stack = 20
         self.text_field_original_values = {}
@@ -152,6 +158,207 @@ class WorkflowBuilder:
         self.canvas.bind_all("<Button-4>", lambda e: self.on_mousewheel_linux(e, -1))
         self.canvas.bind_all("<Button-5>", lambda e: self.on_mousewheel_linux(e, 1))
 
+    def create_emergency_stop_ui(self):
+        """Create a small transparent emergency stop window with just the button"""
+        # Create a floating top-level window for the emergency button
+        self.emergency_window = tk.Toplevel(self.root)
+        self.emergency_window.title("")
+
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        window_width = int(screen_width * 0.15)
+        window_height = int(screen_height * 0.07)
+        
+        # Ensure minimum size for readability
+        window_width = max(window_width, 180)
+        window_height = max(window_height, 60)
+        
+        # Set the window size
+        self.emergency_window.geometry(f"{window_width}x{window_height}")
+
+        self.emergency_window.attributes("-alpha", 0.4)  # 90% opacity
+        self.emergency_window.attributes("-topmost", True)  # Stay on top
+        self.emergency_window.overrideredirect(True)  # Remove window decorations
+        
+        # Set background to error color
+        self.emergency_window.configure(bg=self.colors["error"])
+        
+        # Add a thin border frame
+        frame = tk.Frame(
+            self.emergency_window,
+            bg="white",
+            bd=1
+        )
+        frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+        
+        # Add just the emergency stop button (filling the whole window)
+        stop_button = tk.Button(
+            frame,
+            text="EMERGENCY STOP",
+            font=("Arial", int(self.root.winfo_screenheight()*0.02), "bold"),
+            command=self.trigger_emergency_pause,
+            bg="#ff0000",
+            fg="white",
+            activebackground="#ff6b6b",
+            activeforeground="white",
+            relief=tk.RAISED,
+            bd=2
+        )
+        stop_button.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        
+        # Add dragging capability since we removed the title bar
+        self.add_window_drag_capability(self.emergency_window)
+        
+        # Hide window initially
+        self.emergency_window.withdraw()
+        
+        return self.emergency_window
+
+    def add_window_drag_capability(self, window):
+        """Add the ability to drag a window without a title bar"""
+        def start_drag(event):
+            window.x = event.x
+            window.y = event.y
+
+        def drag(event):
+            deltax = event.x - window.x
+            deltay = event.y - window.y
+            x = window.winfo_x() + deltax
+            y = window.winfo_y() + deltay
+            window.geometry(f"+{x}+{y}")
+
+        window.bind("<ButtonPress-1>", start_drag)
+        window.bind("<B1-Motion>", drag)
+    
+    def show_emergency_ui(self):
+        """Show the emergency stop UI in the bottom left of the screen"""
+        if hasattr(self, 'emergency_window'):
+            screen_width = self.root.winfo_screenwidth()
+            screen_height = self.root.winfo_screenheight()
+            
+            pos_x = int(screen_width * 0.01)  
+            pos_y = int(screen_height * 0.01)
+            
+            # Set the position
+            self.emergency_window.geometry(f"+{pos_x}+{pos_y}")
+            
+            # Show window
+            self.emergency_window.deiconify()
+        else:
+            # Create if it doesn't exist
+            self.create_emergency_stop_ui()
+            # Reposition it (as create_emergency_stop_ui may position it elsewhere)
+            self.show_emergency_ui()  # Recursive call to apply positioning
+    
+    def hide_emergency_ui(self):
+        """Hide the emergency stop UI"""
+        if hasattr(self, 'emergency_window'):
+            # Reset any states if needed
+            for widget in self.emergency_window.winfo_children():
+                if isinstance(widget, tk.Frame):
+                    for child in widget.winfo_children():
+                        if isinstance(child, tk.Button):
+                            # Reset button text and state
+                            child.config(
+                                text="EMERGENCY STOP",
+                                state=tk.NORMAL,
+                                bg="#ff0000",
+                                fg="white"
+                            )
+            
+            # Hide the window
+            self.emergency_window.withdraw()
+    
+    def trigger_emergency_pause(self):
+        """Handler for emergency pause button click"""
+        # Check if we're running and not already stopping
+        if not self.test_running or hasattr(self, 'stopping') and self.stopping:
+            return
+            
+        # Set flag to prevent multiple stop attempts
+        self.stopping = True
+        print('trigger_emergency_pause')
+        
+        # Set the emergency flag
+        self.emergency_stop_flag.set()
+        
+        # Update the emergency window UI to show stopping
+        if hasattr(self, 'emergency_window'):
+            for widget in self.emergency_window.winfo_children():
+                if isinstance(widget, tk.Frame):
+                    for child in widget.winfo_children():
+                        if isinstance(child, tk.Button):
+                            child.config(text="STOPPING...", state=tk.DISABLED)
+                elif isinstance(widget, tk.Button):
+                    widget.config(text="STOPPING...", state=tk.DISABLED)
+                elif isinstance(widget, tk.Label):
+                    widget.config(text="STOPPING WORKFLOW...")
+        
+        # Use a safer approach for thread management
+        # Schedule the termination check to run after a short delay
+        self.root.after(500, self.force_terminate_if_needed)
+
+    def force_terminate_if_needed(self):
+        """Force terminate the thread if it's still running after emergency stop"""
+        # If thread is still alive, try to force terminate it
+        if self.test_thread and self.test_thread.is_alive():
+            try:
+                # Force terminate the thread on Windows
+                if hasattr(self.test_thread, "_thread_id"):
+                    thread_id = self.test_thread._thread_id
+                    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(
+                        ctypes.c_long(thread_id),
+                        ctypes.py_object(KeyboardInterrupt)
+                    )
+                    if res > 1:
+                        ctypes.pythonapi.PyThreadState_SetAsyncExc(
+                            thread_id, 
+                            ctypes.c_long(0)
+                        )
+                print("Forced thread termination")
+            except Exception as e:
+                print(f"Error during forced termination: {e}")
+            
+            # Wait a bit more and check again
+            self.root.after(500, self.check_if_terminated)
+        else:
+            # Thread already terminated, make sure UI gets updated
+            self.check_if_terminated()
+
+    def check_if_terminated(self):
+        """Check if the thread is terminated and update UI if needed"""
+        if not self.test_thread or not self.test_thread.is_alive():
+            # Thread is done, make sure UI is updated
+            if self.test_running:  # If finish_test hasn't been called yet
+                # Force finish with emergency stop message
+                self.finish_emergency()
+        else:
+            # Thread still alive, try one more force termination
+            try:
+                if hasattr(self.test_thread, "_thread_id"):
+                    thread_id = self.test_thread._thread_id
+                    ctypes.pythonapi.PyThreadState_SetAsyncExc(
+                        ctypes.c_long(thread_id),
+                        ctypes.py_object(SystemExit)
+                    )
+                print("Final termination attempt")
+            except:
+                pass
+            
+            # Final check and forced finish
+            self.root.after(500, self.finish_emergency)
+
+    def finish_emergency(self):
+        """Forcibly finish a test that was emergency stopped"""
+        # Directly call finish_test with predetermined values
+        self.finish_test(
+            success=False,
+            stdout="Emergency stop forced test termination.",
+            stderr="The workflow was forcibly stopped and did not complete normally.",
+            test_type="interrupted workflow"
+        )
+     
     def configure_ttk_styles(self):
         """Configure ttk styles for dark theme"""
         style = ttk.Style()
@@ -206,7 +413,7 @@ class WorkflowBuilder:
         self.root.option_add('*Dialog.msg.foreground', self.colors["fg"])
         
         # For message boxes
-        self.root.option_add('*Dialog.msg.font', 'Arial 10')
+        self.root.option_add('*Dialog.msg.font',f'Arial {int(self.root.winfo_screenheight()*0.005)}')
         
         # Set button colors
         self.root.option_add('*Dialog.button.background', self.colors["button_bg"])
@@ -460,16 +667,16 @@ class WorkflowBuilder:
             
         group_commands = self.groups_frames[group_name].commands_frame.winfo_children()
         return group_commands.index(command_frame) if command_frame in group_commands else -1
-        
+    
     def test_workflow(self, group_name=None, command_index=None):
         """
-        Test the workflow, a specific group, or a specific command
-        
-        Args:
-            group_name: If provided, only test this group
-            command_index: If provided with group_name, only test this specific command
+        Modified test_workflow method with threading and emergency pause support
         """
-        import tempfile
+        # Make sure the flag is cleared before testing
+        self.emergency_stop_flag.clear()
+        
+        if hasattr(self, 'stopping'):
+            delattr(self, 'stopping')
         
         # Update all commands in workflow before testing
         for g_name, group_frame in self.groups_frames.items():
@@ -517,6 +724,9 @@ class WorkflowBuilder:
                                     pass
         
         try:
+            # Show the emergency UI
+            self.show_emergency_ui()
+            
             # Create a test workflow based on what's being tested
             test_workflow = {}
             
@@ -553,46 +763,96 @@ class WorkflowBuilder:
                 def get_logs(self):
                     return "".join(self.logs)
             
-            # Redirect stdout and stderr to capture logs
-            stdout_capture = LogCapture()
-            stderr_capture = LogCapture()
-            
-            old_stdout = sys.stdout
-            old_stderr = sys.stderr
-            
-            sys.stdout = stdout_capture
-            sys.stderr = stderr_capture
-            
-            try:
-                # Call the main function directly
-                self.backend_module(temp_filename)
-                success = True
-            except Exception as e:
+            # Create a wrapper function to run the test in a thread
+            def run_test_thread():
+                # Store thread ID for emergency termination
+                if not hasattr(threading.current_thread(), "_thread_id"):
+                    for thread_id, thread in threading._active.items():
+                        if thread is threading.current_thread():
+                            threading.current_thread()._thread_id = thread_id
+                            break
+                
                 success = False
-                error_msg = str(e)
-            finally:
-                # Restore stdout and stderr
-                sys.stdout = old_stdout
-                sys.stderr = old_stderr
+                error_msg = "Interrupted by emergency stop"
+                
+                # Redirect stdout and stderr to capture logs
+                stdout_capture = LogCapture()
+                stderr_capture = LogCapture()
+                
+                old_stdout = sys.stdout
+                old_stderr = sys.stderr
+                
+                sys.stdout = stdout_capture
+                sys.stderr = stderr_capture
+                try:
+                    # Call the backend module with our temp file and emergency flag
+                    self.backend_module(temp_filename, self.emergency_stop_flag)
+                    success = True
+                    error_msg = ""
+                except Exception as e:
+                    success = False
+                    error_msg = str(e)
+                finally:
+                    # Restore stdout and stderr
+                    sys.stdout = old_stdout
+                    sys.stderr = old_stderr
+                    
+                    # Clean up the temporary file
+                    try:
+                        os.unlink(temp_filename)
+                    except:
+                        pass
+                    
+                    # Get captured logs
+                    stdout_logs = stdout_capture.get_logs()
+                    stderr_logs = stderr_capture.get_logs()
+                    
+                    # Update UI from main thread
+                    self.root.after(100, lambda: self.finish_test(
+                        success=success,
+                        stdout=stdout_logs,
+                        stderr=stderr_logs if stderr_logs else (error_msg if error_msg else "Unknown error"),
+                        test_type=test_type
+                    ))
             
-            # Clean up the temporary file
-            os.unlink(temp_filename)
+            # Indicate that a test is running
+            self.test_running = True
             
-            # Get captured logs
-            stdout_logs = stdout_capture.get_logs()
-            stderr_logs = stderr_capture.get_logs()
-            
-            # Show results in a new window
-            self.show_test_results(
-                success=success if 'success' in locals() else False,
-                stdout=stdout_logs,
-                stderr=stderr_logs if 'stderr_logs' in locals() else (error_msg if 'error_msg' in locals() else "Unknown error"),
-                test_type=test_type
-            )
+            # Create and start the test thread
+            self.test_thread = threading.Thread(target=run_test_thread, daemon=True)
+            self.test_thread.start()
                 
         except Exception as e:
+            # Hide emergency UI on error
+            self.hide_emergency_ui()
             messagebox.showerror("Error", f"Failed to test workflow: {e}")
-     
+            # Reset state
+            self.test_running = False
+            self.emergency_pause_btn.config(state=tk.DISABLED)    
+    
+    def finish_test(self, success, stdout, stderr, test_type):
+        """Called when test thread completes to update UI"""
+        # Reset test state
+        self.test_running = False
+        self.emergency_stop_flag.clear()
+        
+        # Clear the stopping flags if they exist
+        if hasattr(self, 'stopping'):
+            delattr(self, 'stopping')
+        if hasattr(self, 'stop_start_time'):
+            delattr(self, 'stop_start_time')
+        
+        # Hide the emergency UI
+        self.hide_emergency_ui()
+        
+        # Show results
+        self.show_test_results(
+            success=success,
+            stdout=stdout,
+            stderr=stderr,
+            test_type=test_type
+        )
+    
     def show_test_results(self, success, stdout, stderr, test_type):
         """Show test results in a scrollable window"""
         result_window = tk.Toplevel(self.root)
@@ -630,7 +890,7 @@ class WorkflowBuilder:
             text=f"Test {'SUCCEEDED' if success else 'FAILED'}",
             fg="green" if success else self.colors["error"],
             bg=self.colors["bg"],
-            font=("Arial", 12, "bold")
+            font=("Arial", int(self.root.winfo_screenheight()*0.015), "bold")
         )
         status_label.grid(row=0, column=0, sticky="w")
         
@@ -699,57 +959,50 @@ class WorkflowBuilder:
         Stops when any key is pressed
         """
         try:
-            # Create a new window to display mouse position
             position_window = tk.Toplevel(self.root)
             position_window.title("Mouse Position Tracker")
-            position_window.geometry("400x300")  # Increased size from 300x150
-            position_window.resizable(True, True)  # Allow resizing
-            
-            # Apply dark theme to the window
+            screen_width = position_window.winfo_screenwidth()
+            screen_height = position_window.winfo_screenheight()
+            window_width = int(screen_width * 0.22)
+            window_height = int(screen_height * 0.3)
+            min_width = 300
+            min_height = 200
+            window_width = max(window_width, min_width)
+            window_height = max(window_height, min_height)
+            position_window.geometry(f"{window_width}x{window_height}")
+            position_window.resizable(True, True)
             position_window.configure(bg=self.colors["bg"])
-            
-            # Label to display coordinates
             coordinates_var = tk.StringVar(value="Move your mouse...")
             coordinates_label = tk.Label(
                 position_window, 
                 textvariable=coordinates_var,
-                font=("Arial", 18),  # Increased font size
+                font=("Arial", int(self.root.winfo_screenheight()*0.02)),
                 height=2,
                 bg=self.colors["bg"],
                 fg=self.colors["fg"]
             )
-            coordinates_label.pack(pady=25)  # Increased padding
-            
-            # Instructions label
+            coordinates_label.pack(pady=25)
             instructions = tk.Label(
                 position_window,
                 text="Press ANY KEY to capture the current position",
-                font=("Arial", 12),  # Increased font size
-                wraplength=380,  # Set text wrapping
+                font=("Arial", int(self.root.winfo_screenheight()*0.015)),
+                wraplength=380,
                 bg=self.colors["bg"],
                 fg=self.colors["fg"]
             )
-            instructions.pack(pady=10)  # Increased padding
-            
-            # Status label
+            instructions.pack(pady=10)
             status_var = tk.StringVar(value="Tracking mouse...")
             status_label = tk.Label(
                 position_window,
                 textvariable=status_var,
-                font=("Arial", 12),  # Increased font size
+                font=("Arial", int(self.root.winfo_screenheight()*0.015)),
                 fg=self.colors["accent"],
                 bg=self.colors["bg"],
-                wraplength=380  # Set text wrapping
+                wraplength=380
             )
-            status_label.pack(pady=15)  # Increased padding
-            
-            # Variable to store the last position
+            status_label.pack(pady=15)
             last_position = [0, 0]
-            
-            # Flag to control the tracking loop
             tracking = True
-            
-            # Function to track mouse position
             def track_position():
                 while tracking:
                     try:
@@ -760,8 +1013,6 @@ class WorkflowBuilder:
                     except Exception as e:
                         coordinates_var.set(f"Error: {e}")
                         break
-            
-            # Function to detect key press and stop tracking
             def on_key_press(event):
                 nonlocal tracking
                 if tracking:
@@ -795,15 +1046,13 @@ class WorkflowBuilder:
                     tracking = True
                     tracking_thread = threading.Thread(target=track_position, daemon=True)
                     tracking_thread.start()
-                    
-                    # Make sure window has focus
+
                     position_window.focus_force()
             
-            # Create recapture button (initially hidden)
             recapture_button = tk.Button(
                 position_window,
                 text="Capture Again",
-                font=("Arial", 11),
+                font=("Arial", int(self.root.winfo_screenheight()*0.015)),
                 bg=self.colors["button_bg"],
                 fg=self.colors["button_fg"],
                 activebackground=self.colors["highlight"],
@@ -813,28 +1062,19 @@ class WorkflowBuilder:
                 bd=0,
                 command=restart_tracking
             )
-            # Button will be shown only after position is captured
-            
-            # Start tracking in a separate thread
+
             tracking_thread = threading.Thread(target=track_position, daemon=True)
             tracking_thread.start()
             
-            # Bind key press event to the window
             position_window.bind("<KeyPress>", on_key_press)
-            
-            # Make sure window has focus to capture key events
+
             position_window.focus_force()
-            
-            # Also use the keyboard library to catch global keypresses
+
             def global_key_handler(e):
                 if tracking:
-                    # Call our key handler
                     on_key_press(None)
-            
-            # Add a keyboard hook
             keyboard.hook(global_key_handler)
-            
-            # Ensure thread is stopped and hook is removed when window closes
+
             def on_window_close():
                 nonlocal tracking
                 tracking = False
@@ -844,7 +1084,6 @@ class WorkflowBuilder:
             position_window.protocol("WM_DELETE_WINDOW", on_window_close)
             
         except ImportError as e:
-            # Determine which package is missing
             if "pyautogui" in str(e):
                 messagebox.showerror("Error", "PyAutoGUI is not installed. Please install it using: pip install pyautogui")
             elif "keyboard" in str(e):
@@ -923,7 +1162,20 @@ class WorkflowBuilder:
             # Create a result window to display the selection
             result_window = tk.Toplevel(self.root)
             result_window.title("ROI Selection Result")
-            result_window.geometry("400x200")
+            screen_width = result_window.winfo_screenwidth()
+            screen_height = result_window.winfo_screenheight()
+
+            window_width = int(screen_width * 0.25)
+            window_height = int(screen_height * 0.20)
+
+            # Set minimum size to ensure UI elements are always visible
+            min_width = 300
+            min_height = 200
+            window_width = max(window_width, min_width)
+            window_height = max(window_height, min_height)
+
+            # Set window geometry
+            result_window.geometry(f"{window_width}x{window_height}")
             
             # Apply dark theme to the window
             result_window.configure(bg=self.colors["bg"])
@@ -932,7 +1184,7 @@ class WorkflowBuilder:
             tk.Label(
                 result_window, 
                 text="Selected Region of Interest (ROI):", 
-                font=("Arial", 12, "bold"),
+                font=("Arial", int(self.root.winfo_screenheight()*0.015), "bold"),
                 bg=self.colors["bg"],
                 fg=self.colors["fg"]
             ).pack(pady=10)
@@ -941,7 +1193,7 @@ class WorkflowBuilder:
             tk.Label(
                 result_window,
                 text=roi_text,
-                font=("Arial", 14),
+                font=("Arial", int(self.root.winfo_screenheight()*0.02)),
                 bg=self.colors["bg"],
                 fg=self.colors["highlight"]
             ).pack(pady=5)
@@ -953,7 +1205,7 @@ class WorkflowBuilder:
             tk.Label(
                 result_window,
                 text=image_info,
-                font=("Arial", 10),
+                font=("Arial", int(self.root.winfo_screenheight()*0.015)),
                 justify=tk.LEFT,
                 bg=self.colors["bg"],
                 fg=self.colors["fg"]
@@ -969,7 +1221,7 @@ class WorkflowBuilder:
                 result_window,
                 text="Copy ROI to Clipboard",
                 command=copy_roi,
-                font=("Arial", 11),
+                font=("Arial", int(self.root.winfo_screenheight()*0.015)),
                 bg=self.colors["button_bg"],
                 fg=self.colors["button_fg"],
                 activebackground=self.colors["highlight"],
@@ -1273,7 +1525,7 @@ class WorkflowBuilder:
         
         # Create a reordered copy of the workflow data
         reordered_workflow = self.workflow[group_name].copy()
-        print(self.workflow[group_name])
+
         # Move the command in the reordered workflow
         command_data = reordered_workflow.pop(current_index)
         reordered_workflow.insert(new_index, command_data)
@@ -1366,12 +1618,15 @@ class WorkflowBuilder:
         
         # Get the commands frame for this group
         commands_frame = self.groups_frames[group_name].commands_frame
-        
+        next_row = 0
+        for child in commands_frame.winfo_children():
+            grid_info = child.grid_info()
+            if 'row' in grid_info and grid_info['row'] >= next_row:
+                next_row = grid_info['row'] + 1
         # Create command frame with dark theme colors
         command_frame = tk.Frame(commands_frame, bd=1, relief=tk.SOLID, 
                             bg=self.colors["frame_bg"])
-        row_index = len(commands_frame.winfo_children())
-        command_frame.grid(row=row_index, column=0, sticky="ew", padx=5, pady=2)
+        command_frame.grid(row=next_row, column=0, sticky="ew", padx=5, pady=2)
         command_frame.grid_columnconfigure(1, weight=1)
         
         # Calculate window width for relative sizing
@@ -1746,10 +2001,16 @@ class WorkflowBuilder:
             import copy
             self.workflow[name] = copy.deepcopy(group_data)
         
+        next_row = 0
+        for frame in self.groups_frames.values():
+            grid_info = frame.grid_info()
+            if 'row' in grid_info and grid_info['row'] >= next_row:
+                next_row = grid_info['row'] + 1
+        
         # Create group frame with dark theme colors
         group_frame = tk.LabelFrame(self.groups_container, text="", bd=2, relief=tk.GROOVE,
                                 bg=self.colors["frame_bg"], fg=self.colors["fg"])
-        group_frame.grid(row=len(self.groups_frames), column=0, sticky="ew", padx=5, pady=5)
+        group_frame.grid(row=next_row, column=0, sticky="ew", padx=5, pady=5)
         self.groups_frames[name] = group_frame
         
         group_frame.grid_columnconfigure(0, weight=1)

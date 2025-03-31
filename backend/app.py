@@ -157,9 +157,14 @@ def get_next_screenshot_index():
     indices = [int(f.split("_")[1].split(".")[0]) for f in existing_files if f.split("_")[1].split(".")[0].isdigit()]
     return max(indices, default=-1) + 1
 
-def check_by_image(input_image_path, roi=None, threshold=0.8, debug=False):
+def check_by_image(input_image_path, roi=None, threshold=0.8, debug=False, check_emergency_pause=None):
     start_time = time.time()
     while True:
+        # Check for emergency pause
+        if check_emergency_pause and check_emergency_pause():
+            print("Emergency pause detected during image check")
+            return None
+            
         try:
             elapsed_time = time.time() - start_time
             if elapsed_time > 10:
@@ -215,11 +220,25 @@ def check_by_image(input_image_path, roi=None, threshold=0.8, debug=False):
                 print(f"Saved: {screenshot_path}")
                     
                 return (middle_x, middle_y)
+                
+            # Small delay before next check, with emergency pause check
+            for _ in range(5):  # Check pause every 100ms
+                time.sleep(0.1)
+                if check_emergency_pause and check_emergency_pause():
+                    print("Emergency pause detected during image check")
+                    return None
+                
         except Exception as e:
             print(f"Error in check_by_image: {e}")
                         
-def check_by_image_and_move(input_image_path, threshold=0.8, roi=None, debug=False):
-    position = check_by_image(input_image_path=input_image_path, threshold=threshold, roi=roi, debug=debug)
+def check_by_image_and_move(input_image_path, threshold=0.8, roi=None, debug=False, check_emergency_pause=None):
+    position = check_by_image(
+        input_image_path=input_image_path, 
+        threshold=threshold, 
+        roi=roi, 
+        debug=debug,
+        check_emergency_pause=check_emergency_pause
+    )
     if position is not None:
         pyautogui.moveTo(position[0], position[1])
     else:
@@ -235,56 +254,182 @@ def connect_driver():
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     return driver
 
-def main(json_file):
+def create_emergency_pause_checker(emergency_pause_flag_ref):
+    """
+    Creates a function that checks if emergency pause has been requested
+    
+    Args:
+        emergency_pause_flag_ref: A reference to the emergency pause flag variable
+        
+    Returns:
+        Function that returns True if emergency pause is requested
+    """
+    def check_emergency_pause():
+        # Check if emergency pause has been requested
+        if emergency_pause_flag_ref is None:
+            return False
+            
+        # Handle Event objects
+        if hasattr(emergency_pause_flag_ref, 'is_set'):
+            return emergency_pause_flag_ref.is_set()
+            
+        # Handle ThreadSafeReference with 'value' attribute
+        elif hasattr(emergency_pause_flag_ref, 'value'):
+            return bool(emergency_pause_flag_ref.value)
+            
+        # Handle boolean-like objects
+        else:
+            return bool(emergency_pause_flag_ref)
+            
+    return check_emergency_pause
+
+def safe_sleep(duration, check_emergency_pause=None):
+    """Sleep with emergency pause checks"""
+    if not check_emergency_pause:
+        time.sleep(duration)
+        return False
+        
+    # Split sleep into small increments to check for emergency pause
+    increment = 0.1  # Check every 100ms
+    iterations = int(duration / increment) + 1
+    
+    for _ in range(iterations):
+        if check_emergency_pause():
+            print("Emergency pause detected during sleep")
+            return True
+        # Sleep for the smaller increment or the remaining time
+        time_left = max(0, duration - (_ * increment))
+        sleep_time = min(increment, time_left)
+        if sleep_time > 0:
+            time.sleep(sleep_time)
+            
+    return False
+
+def main(json_file, emergency_pause_flag=None):
+    """
+    Main function that executes a workflow from a JSON file
+    
+    Args:
+        json_file: Path to the JSON workflow file
+        emergency_pause_flag: Reference to a flag that indicates if emergency pause is requested
+    """
     data = load_json(json_file)
+    
+    # Create emergency pause checker
+    check_emergency_pause = None
+    if emergency_pause_flag is not None:
+        check_emergency_pause = create_emergency_pause_checker(emergency_pause_flag)
+        print("Emergency pause functionality enabled")
     
     driver = None
     for group_name, actions in data.items():  # Iterate over all action groups
         print(f"Executing group: {group_name}")
+        
+        # Check for emergency pause before starting group
+        if check_emergency_pause and check_emergency_pause():
+            print("Emergency stop requested! Halting execution.")
+            return
+            
         for action in actions:
+            # Check for emergency pause before each command
+            if check_emergency_pause and check_emergency_pause():
+                print("Emergency stop requested! Halting execution.")
+                return
+                
             command = action.get("command")
             args = action.get("args", {})
             print(action)
-            if command == "OpenURL":
-                open_url(driver, args.get("url"))
-                time.sleep(3)
-            elif command == "New Tab":
-                new_tab(driver)
-            elif command == "Close Tab":
-                close_tab(driver)
-            elif command == "Reload":
-                reload_page(driver)
-            elif command == "Go Back":
-                go_back(driver)
-            elif command == "Mouse Click":
-                mouse_click()
-            elif command == "Mouse Press and Hold":
-                mouse_press_and_hold(args.get("x"), args.get("y"), args.get("duration", 2))
-            elif command == "Mouse Move":
-                mouse_move(args.get("x"), args.get("y"))
-            elif command == "Mouse Scroll":
-                mouse_scroll(args.get("amount"))
-            elif command == "Keyboard Press":
-                keyboard_press(args.get("key"))
-            elif command == "Keyboard Hold":
-                keyboard_hold(args.get("key"), args.get("duration", 2))
-            elif command == "Keyboard Type":
-                keyboard_type(args.get("text"))
-            elif command == "Click Element":
-                locate_and_click_element(driver, args.get("full_x_path"))
-            elif command == "Check by Image":
-                check_by_image(input_image_path=args.get("img_path"), threshold=args.get("threshold", 0.8), roi=args.get("roi", None), debug=args.get("debug", False))
-            elif command == "Check by Image And Move":
-                check_by_image_and_move(input_image_path=args.get("img_path"), threshold=args.get("threshold", 0.8), roi=args.get("roi", None), debug=args.get("debug", False))
-            elif command == "Send Hotkey":
-                send_hotkey(*args.get("keys"))
-            elif command == "Connect Driver":
-                driver = connect_driver()
-            elif command == "Pause":
-                time.sleep(args.get("duration", 1))
-            print(f"Done with: {command}")
-            time.sleep(1)
-    print('Done with all commands')
+            
+            try:
+                if command == "OpenURL":
+                    open_url(driver, args.get("url"))
+                    if safe_sleep(3, check_emergency_pause):
+                        return
+                elif command == "New Tab":
+                    new_tab(driver)
+                elif command == "Close Tab":
+                    close_tab(driver)
+                elif command == "Reload":
+                    reload_page(driver)
+                elif command == "Go Back":
+                    go_back(driver)
+                elif command == "Mouse Click":
+                    mouse_click()
+                elif command == "Mouse Press and Hold":
+                    # Check if we should do this operation with pause checks
+                    duration = args.get("duration", 2)
+                    if duration > 0.5 and check_emergency_pause:
+                        pyautogui.mouseDown(args.get("x"), args.get("y"))
+                        if safe_sleep(duration, check_emergency_pause):
+                            pyautogui.mouseUp()  # Make sure to release
+                            return
+                        pyautogui.mouseUp(args.get("x"), args.get("y"))
+                    else:
+                        mouse_press_and_hold(args.get("x"), args.get("y"), duration)
+                elif command == "Mouse Move":
+                    mouse_move(args.get("x"), args.get("y"))
+                elif command == "Mouse Scroll":
+                    mouse_scroll(args.get("amount"))
+                elif command == "Keyboard Press":
+                    keyboard_press(args.get("key"))
+                elif command == "Keyboard Hold":
+                    # Check if we should do this operation with pause checks
+                    duration = args.get("duration", 2)
+                    if duration > 0.5 and check_emergency_pause:
+                        pyautogui.keyDown(args.get("key"))
+                        if safe_sleep(duration, check_emergency_pause):
+                            pyautogui.keyUp(args.get("key"))  # Make sure to release
+                            return
+                        pyautogui.keyUp(args.get("key"))
+                    else:
+                        keyboard_hold(args.get("key"), duration)
+                elif command == "Keyboard Type":
+                    keyboard_type(args.get("text"))
+                elif command == "Click Element":
+                    locate_and_click_element(driver, args.get("full_x_path"))
+                elif command == "Check by Image":
+                    check_by_image(
+                        input_image_path=args.get("img_path"), 
+                        threshold=args.get("threshold", 0.8), 
+                        roi=args.get("roi", None), 
+                        debug=args.get("debug", False),
+                        check_emergency_pause=check_emergency_pause
+                    )
+                elif command == "Check by Image And Move":
+                    check_by_image_and_move(
+                        input_image_path=args.get("img_path"), 
+                        threshold=args.get("threshold", 0.8), 
+                        roi=args.get("roi", None), 
+                        debug=args.get("debug", False),
+                        check_emergency_pause=check_emergency_pause
+                    )
+                elif command == "Send Hotkey":
+                    send_hotkey(*args.get("keys"))
+                elif command == "Connect Driver":
+                    driver = connect_driver()
+                elif command == "Pause":
+                    duration = args.get("duration", 1)
+                    if safe_sleep(duration, check_emergency_pause):
+                        return
+                
+                print(f"Done with: {command}")
+                
+                # Small delay between commands with emergency pause check
+                if safe_sleep(1, check_emergency_pause):
+                    return
+                    
+            except Exception as e:
+                print(f"Error executing command {command}: {e}")
+                # Don't break execution, continue with next command
+                
+            # Final check after command execution
+            if check_emergency_pause and check_emergency_pause():
+                print("Emergency stop requested after command execution! Halting.")
+                return
+                
+        print(f"Completed group: {group_name}")
+        
+    print("Workflow execution completed successfully")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
