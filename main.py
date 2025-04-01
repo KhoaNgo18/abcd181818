@@ -71,8 +71,35 @@ class WorkflowBuilder:
                 'update_command_args_medium_width': 20,
                 'update_command_args_large_width': 40,
                 'button_largupdate_command_args_max_width': 100,
-                },
-            (1920, 1080): {},
+            },
+            (1920, 1080): {
+                'font_tiny': 8,
+                'font_small': 10,
+                'font_large': 14,
+                'main_width': 1500,
+                'main_height': 800,
+                'get_mouse_width': 300,
+                'get_mouse_height': 300,
+                'select_roi_width': 300,
+                'select_roi_height': 150,
+                'button_small_command': 5,
+                'button_large_command': 10,
+                'button_small_group': 8,
+                'button_large_group': 15,
+                'emergency_width': 150,
+                'emergency_height': 50,
+                'show_emergency_ui_x': 10,
+                'show_emergency_ui_y': 10,
+                'show_result_width': 1300,
+                'show_result_height': 600,
+                'group_name_width': 30,
+                'command_name_width': 25,
+                'update_command_args_tiny_width': 7,
+                'update_command_args_small_width': 15,
+                'update_command_args_medium_width': 20,
+                'update_command_args_large_width': 40,
+                'button_largupdate_command_args_max_width': 100,
+            },
             (2560, 1440): {},
         }
         
@@ -546,6 +573,11 @@ class WorkflowBuilder:
                     args[key] = int(value) if value else 0
                 except ValueError:
                     args[key] = 0
+            elif key == 'duration':
+                try:
+                    args[key] = float(value) if value else 1.0
+                except ValueError:
+                    args[key] = 1.0
             else:
                 # Don't add empty values to keep JSON clean
                 if value.strip():
@@ -1906,24 +1938,23 @@ class WorkflowBuilder:
                 
             arg_widgets.append(("x", entry_x))
             arg_widgets.append(("y", entry_y))
-            # Add undo tracking
+
             field_id_x = f"cmd_{id(command_frame)}_{group_name}_x"
             field_id_y = f"cmd_{id(command_frame)}_{group_name}_y"
             self.setup_text_field_tracking(entry_x, field_id_x)
             self.setup_text_field_tracking(entry_y, field_id_y)
             
         elif command_type == "Pause":
-            # Add Pause duration field
             lbl = tk.Label(args_frame, text="Duration (seconds):", font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'bold'),
                         bg=self.colors["frame_bg"], fg=self.colors["fg"])
             lbl.pack(side=tk.LEFT, padx=2)
             entry = tk.Entry(args_frame, width=tiny_width, font=('Arial', self.geometries[(self.root.winfo_screenwidth(), self.root.winfo_screenheight())]['font_small'], 'normal'),
                         bg=self.colors["input_bg"], fg=self.colors["fg"],
                         insertbackground=self.colors["fg"])
-            entry.insert(0, "1.0")  # Default duration of 1 second
+            entry.insert(0, "1.0")
             entry.pack(side=tk.LEFT, padx=2)
             arg_widgets.append(("duration", entry))
-            # Add undo tracking
+            
             field_id = f"cmd_{id(command_frame)}_{group_name}_duration"
             self.setup_text_field_tracking(entry, field_id)
         

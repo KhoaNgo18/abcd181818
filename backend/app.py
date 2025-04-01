@@ -415,7 +415,7 @@ def main(json_file, emergency_pause_flag=None):
                 print(f"Done with: {command}")
                 
                 # Small delay between commands with emergency pause check
-                if safe_sleep(1, check_emergency_pause):
+                if safe_sleep(0.5, check_emergency_pause):
                     return
                     
             except Exception as e:
