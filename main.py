@@ -2190,7 +2190,7 @@ class WorkflowBuilder:
             {
                 "command": "Keyboard Type",
                 "args": {
-                    "text": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --remote-debugging-port=9222 --profile-directory=\"Profile 1\""
+                    "text": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --remote-debugging-port=9222 --user-data-dir=\"C:\Air\" --profile-directory=\"Profile 91\""
                 }
             },
             {

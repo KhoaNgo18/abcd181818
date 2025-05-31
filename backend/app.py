@@ -249,9 +249,11 @@ def send_hotkey(*keys):
     pyautogui.hotkey(*keys)
 
 def connect_driver():
+    print('Driver connecting start...')
     options = Options()
     options.debugger_address = "127.0.0.1:9222"
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    print('Driver is connected')
     return driver
 
 def create_emergency_pause_checker(emergency_pause_flag_ref):
@@ -415,7 +417,7 @@ def main(json_file, emergency_pause_flag=None):
                 print(f"Done with: {command}")
                 
                 # Small delay between commands with emergency pause check
-                if safe_sleep(0.5, check_emergency_pause):
+                if safe_sleep(1, check_emergency_pause):
                     return
                     
             except Exception as e:
